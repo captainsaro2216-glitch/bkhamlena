@@ -251,11 +251,11 @@ const Index = () => {
   const handleGenerate = (e: React.FormEvent) => {
     e.preventDefault();
     if (!validN || parsedN <= 0) {
-      toast.error("Rows must be a positive integer");
+      toast.error(t.toastRowsInvalid);
       return;
     }
     if (!validT) {
-      toast.error("Target total must be an integer (no decimals)");
+      toast.error(t.toastTotalInvalid);
       return;
     }
     const values = generateIntegers(parsedN, parsedT);
@@ -280,14 +280,14 @@ const Index = () => {
     try {
       await navigator.clipboard.writeText(joinValues(values, format));
       const labels: Record<CopyFormat, string> = {
-        newline: "newline-separated",
-        comma: "comma-separated",
-        "comma-space": "comma + space",
-        space: "space-separated",
+        newline: t.newline,
+        comma: t.comma,
+        "comma-space": t.commaSpace,
+        space: t.space,
       };
-      toast.success(`Copied (${labels[format]})`);
+      toast.success(t.toastCopied(labels[format]));
     } catch {
-      toast.error("Copy failed");
+      toast.error(t.toastCopyFailed);
     }
   };
 
@@ -318,7 +318,7 @@ const Index = () => {
   };
 
   const createProfile = () => {
-    const name = window.prompt("Name this profile")?.trim();
+    const name = window.prompt(t.profilePromptCreate)?.trim();
     if (!name) return;
     const id = `p-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
     setStore((prev) => ({
@@ -327,11 +327,11 @@ const Index = () => {
     }));
     setResults([]);
     setSelectedId(null);
-    toast.success(`Profile "${name}" created`);
+    toast.success(t.profileCreated(name));
   };
 
   const renameProfile = () => {
-    const name = window.prompt("Rename profile", activeProfile.name)?.trim();
+    const name = window.prompt(t.profilePromptRename, activeProfile.name)?.trim();
     if (!name) return;
     setStore((prev) => ({
       ...prev,
@@ -343,10 +343,10 @@ const Index = () => {
 
   const deleteProfile = () => {
     if (store.profiles.length <= 1) {
-      toast.error("Can't delete the only profile");
+      toast.error(t.cantDeleteOnlyProfile);
       return;
     }
-    if (!window.confirm(`Delete profile "${activeProfile.name}"?`)) return;
+    if (!window.confirm(t.confirmDeleteProfile(activeProfile.name))) return;
     setStore((prev) => {
       const remaining = prev.profiles.filter((p) => p.id !== prev.activeId);
       return { profiles: remaining, activeId: remaining[0].id };
