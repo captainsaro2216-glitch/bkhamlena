@@ -371,23 +371,23 @@ const Index = () => {
               : "glass-button px-3 py-1.5 text-xs"
           }
         >
-          Copy ▾
+          {t.copy} ▾
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="glass-panel border-0">
-        <DropdownMenuLabel>Copy as…</DropdownMenuLabel>
+        <DropdownMenuLabel>{t.copyAs}</DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={() => copyValues(values, "newline")}>
-          Newline-separated
+          {t.newline}
         </DropdownMenuItem>
         <DropdownMenuItem onClick={() => copyValues(values, "comma")}>
-          Comma-separated
+          {t.comma}
         </DropdownMenuItem>
         <DropdownMenuItem onClick={() => copyValues(values, "comma-space")}>
-          Comma + space
+          {t.commaSpace}
         </DropdownMenuItem>
         <DropdownMenuItem onClick={() => copyValues(values, "space")}>
-          Space-separated
+          {t.space}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
