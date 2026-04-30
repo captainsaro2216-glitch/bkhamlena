@@ -8,6 +8,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useI18n } from "@/i18n";
+
 
 type HistoryEntry = {
   id: string;
@@ -92,88 +94,75 @@ function generateIntegers(n: number, total: number): number[] {
   return values;
 }
 
+type PrecheckCode =
+  | "ok"
+  | "block_rows"
+  | "block_total"
+  | "single_row"
+  | "flat"
+  | "repeats"
+  | "low_unique";
+
 type Precheck = {
   level: "ok" | "warn" | "block";
-  message?: string;
-  suggestion?: { rows: number; total: number; label: string };
+  code: PrecheckCode;
+  data?: { pct?: number; unique?: number; n?: number };
+  suggestion?: { rows: number; total: number };
 };
 
 function precheck(n: number, t: number): Precheck {
   if (!Number.isFinite(n) || n <= 0) {
-    return { level: "block", message: "Rows must be a positive integer." };
+    return { level: "block", code: "block_rows" };
   }
   if (!Number.isFinite(t)) {
-    return { level: "block", message: "Target total must be an integer." };
+    return { level: "block", code: "block_total" };
   }
   if (n === 1) {
-    return {
-      level: "warn",
-      message: "Only 1 row — the single value will equal the total exactly.",
-    };
+    return { level: "warn", code: "single_row" };
   }
 
-  // Mirror generator: spread = max(1, floor(|mean| * 0.35)); jitter ∈ [-spread, +spread].
   const absMean = Math.abs(t) / n;
   const spread = Math.max(1, Math.floor(absMean * 0.35));
-  const distinctJitter = 2 * spread + 1; // possible distinct base values before sum-fix
+  const distinctJitter = 2 * spread + 1;
 
-  // Expected number of unique values when drawing n samples uniformly from
-  // `distinctJitter` buckets: distinctJitter * (1 - (1 - 1/distinctJitter)^n).
   const expectedUnique =
     distinctJitter * (1 - Math.pow(1 - 1 / distinctJitter, n));
-  // Expected size of the most-common bucket ≈ n / distinctJitter (rounded up).
   const expectedMaxRepeat = Math.max(1, Math.ceil(n / distinctJitter));
-  const repeatRatio = expectedMaxRepeat / n; // 1.0 = all same
+  const repeatRatio = expectedMaxRepeat / n;
 
   const sign = t < 0 ? -1 : 1;
   const targetForGoodVariety = (avg: number) =>
     sign * Math.max(1, Math.round(n * avg));
 
-  // Block-ish: only one possible base value → results will be essentially flat.
   if (distinctJitter <= 1 || expectedUnique < 2) {
-    const suggested = targetForGoodVariety(15);
     return {
       level: "warn",
-      message:
-        "Estimated variation is ~0 — every row will be the same or differ by ±1.",
-      suggestion: {
-        rows: n,
-        total: suggested,
-        label: `Use total ${suggested} for visible variety`,
-      },
+      code: "flat",
+      suggestion: { rows: n, total: targetForGoodVariety(15) },
     };
   }
 
-  // Too many repeats: dominant value covers more than ~60% of rows.
   if (repeatRatio > 0.6) {
-    const suggested = targetForGoodVariety(15);
     return {
       level: "warn",
-      message: `Most rows (~${Math.round(repeatRatio * 100)}%) will share the same value — results will look flat.`,
-      suggestion: {
-        rows: n,
-        total: suggested,
-        label: `Use total ${suggested} for more variety`,
-      },
+      code: "repeats",
+      data: { pct: Math.round(repeatRatio * 100) },
+      suggestion: { rows: n, total: targetForGoodVariety(15) },
     };
   }
 
-  // Low unique-value count relative to row count.
   if (n >= 5 && expectedUnique / n < 0.35 && expectedUnique < 6) {
-    const suggested = targetForGoodVariety(20);
     return {
       level: "warn",
-      message: `Only ~${Math.round(expectedUnique)} distinct values expected across ${n} rows.`,
-      suggestion: {
-        rows: n,
-        total: suggested,
-        label: `Use total ${suggested} for richer spread`,
-      },
+      code: "low_unique",
+      data: { unique: Math.round(expectedUnique), n },
+      suggestion: { rows: n, total: targetForGoodVariety(20) },
     };
   }
 
-  return { level: "ok" };
+  return { level: "ok", code: "ok" };
 }
+
 
 
 type CopyFormat = "newline" | "comma" | "space" | "comma-space";
