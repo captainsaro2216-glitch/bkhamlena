@@ -8,6 +8,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useI18n } from "@/i18n";
+
 
 type HistoryEntry = {
   id: string;
@@ -92,88 +94,75 @@ function generateIntegers(n: number, total: number): number[] {
   return values;
 }
 
+type PrecheckCode =
+  | "ok"
+  | "block_rows"
+  | "block_total"
+  | "single_row"
+  | "flat"
+  | "repeats"
+  | "low_unique";
+
 type Precheck = {
   level: "ok" | "warn" | "block";
-  message?: string;
-  suggestion?: { rows: number; total: number; label: string };
+  code: PrecheckCode;
+  data?: { pct?: number; unique?: number; n?: number };
+  suggestion?: { rows: number; total: number };
 };
 
 function precheck(n: number, t: number): Precheck {
   if (!Number.isFinite(n) || n <= 0) {
-    return { level: "block", message: "Rows must be a positive integer." };
+    return { level: "block", code: "block_rows" };
   }
   if (!Number.isFinite(t)) {
-    return { level: "block", message: "Target total must be an integer." };
+    return { level: "block", code: "block_total" };
   }
   if (n === 1) {
-    return {
-      level: "warn",
-      message: "Only 1 row — the single value will equal the total exactly.",
-    };
+    return { level: "warn", code: "single_row" };
   }
 
-  // Mirror generator: spread = max(1, floor(|mean| * 0.35)); jitter ∈ [-spread, +spread].
   const absMean = Math.abs(t) / n;
   const spread = Math.max(1, Math.floor(absMean * 0.35));
-  const distinctJitter = 2 * spread + 1; // possible distinct base values before sum-fix
+  const distinctJitter = 2 * spread + 1;
 
-  // Expected number of unique values when drawing n samples uniformly from
-  // `distinctJitter` buckets: distinctJitter * (1 - (1 - 1/distinctJitter)^n).
   const expectedUnique =
     distinctJitter * (1 - Math.pow(1 - 1 / distinctJitter, n));
-  // Expected size of the most-common bucket ≈ n / distinctJitter (rounded up).
   const expectedMaxRepeat = Math.max(1, Math.ceil(n / distinctJitter));
-  const repeatRatio = expectedMaxRepeat / n; // 1.0 = all same
+  const repeatRatio = expectedMaxRepeat / n;
 
   const sign = t < 0 ? -1 : 1;
   const targetForGoodVariety = (avg: number) =>
     sign * Math.max(1, Math.round(n * avg));
 
-  // Block-ish: only one possible base value → results will be essentially flat.
   if (distinctJitter <= 1 || expectedUnique < 2) {
-    const suggested = targetForGoodVariety(15);
     return {
       level: "warn",
-      message:
-        "Estimated variation is ~0 — every row will be the same or differ by ±1.",
-      suggestion: {
-        rows: n,
-        total: suggested,
-        label: `Use total ${suggested} for visible variety`,
-      },
+      code: "flat",
+      suggestion: { rows: n, total: targetForGoodVariety(15) },
     };
   }
 
-  // Too many repeats: dominant value covers more than ~60% of rows.
   if (repeatRatio > 0.6) {
-    const suggested = targetForGoodVariety(15);
     return {
       level: "warn",
-      message: `Most rows (~${Math.round(repeatRatio * 100)}%) will share the same value — results will look flat.`,
-      suggestion: {
-        rows: n,
-        total: suggested,
-        label: `Use total ${suggested} for more variety`,
-      },
+      code: "repeats",
+      data: { pct: Math.round(repeatRatio * 100) },
+      suggestion: { rows: n, total: targetForGoodVariety(15) },
     };
   }
 
-  // Low unique-value count relative to row count.
   if (n >= 5 && expectedUnique / n < 0.35 && expectedUnique < 6) {
-    const suggested = targetForGoodVariety(20);
     return {
       level: "warn",
-      message: `Only ~${Math.round(expectedUnique)} distinct values expected across ${n} rows.`,
-      suggestion: {
-        rows: n,
-        total: suggested,
-        label: `Use total ${suggested} for richer spread`,
-      },
+      code: "low_unique",
+      data: { unique: Math.round(expectedUnique), n },
+      suggestion: { rows: n, total: targetForGoodVariety(20) },
     };
   }
 
-  return { level: "ok" };
+  return { level: "ok", code: "ok" };
 }
+
 
 
 type CopyFormat = "newline" | "comma" | "space" | "comma-space";
@@ -198,6 +187,7 @@ function formatTime(ts: number) {
 }
 
 const Index = () => {
+  const { t, lang, setLang } = useI18n();
   const [rows, setRows] = useState<string>("10");
   const [total, setTotal] = useState<string>("1000");
   const [results, setResults] = useState<number[]>([]);
@@ -223,9 +213,31 @@ const Index = () => {
   const validN = /^\d+$/.test(rows.trim());
   const validT = /^-?\d+$/.test(total.trim());
   const check: Precheck = useMemo(() => {
-    if (!validN || !validT) return { level: "ok" };
+    if (!validN || !validT) return { level: "ok", code: "ok" };
     return precheck(parsedN, parsedT);
   }, [parsedN, parsedT, validN, validT]);
+
+  const checkMessage = (() => {
+    switch (check.code) {
+      case "single_row": return t.warnSingleRow;
+      case "flat": return t.warnFlat;
+      case "repeats": return t.warnRepeats(check.data?.pct ?? 0);
+      case "low_unique": return t.warnLowUnique(check.data?.unique ?? 0, check.data?.n ?? 0);
+      case "block_rows": return t.blockRows;
+      case "block_total": return t.blockTotal;
+      default: return "";
+    }
+  })();
+
+  const suggestionLabel = (() => {
+    if (!check.suggestion) return "";
+    switch (check.code) {
+      case "flat": return t.warnFlatSuggest(check.suggestion.total);
+      case "repeats": return t.warnRepeatsSuggest(check.suggestion.total);
+      case "low_unique": return t.warnLowUniqueSuggest(check.suggestion.total);
+      default: return "";
+    }
+  })();
 
   const updateActiveProfile = (updater: (p: Profile) => Profile) => {
     setStore((prev) => ({
@@ -239,11 +251,11 @@ const Index = () => {
   const handleGenerate = (e: React.FormEvent) => {
     e.preventDefault();
     if (!validN || parsedN <= 0) {
-      toast.error("Rows must be a positive integer");
+      toast.error(t.toastRowsInvalid);
       return;
     }
     if (!validT) {
-      toast.error("Target total must be an integer (no decimals)");
+      toast.error(t.toastTotalInvalid);
       return;
     }
     const values = generateIntegers(parsedN, parsedT);
@@ -268,14 +280,14 @@ const Index = () => {
     try {
       await navigator.clipboard.writeText(joinValues(values, format));
       const labels: Record<CopyFormat, string> = {
-        newline: "newline-separated",
-        comma: "comma-separated",
-        "comma-space": "comma + space",
-        space: "space-separated",
+        newline: t.newline,
+        comma: t.comma,
+        "comma-space": t.commaSpace,
+        space: t.space,
       };
-      toast.success(`Copied (${labels[format]})`);
+      toast.success(t.toastCopied(labels[format]));
     } catch {
-      toast.error("Copy failed");
+      toast.error(t.toastCopyFailed);
     }
   };
 
@@ -306,7 +318,7 @@ const Index = () => {
   };
 
   const createProfile = () => {
-    const name = window.prompt("Name this profile")?.trim();
+    const name = window.prompt(t.profilePromptCreate)?.trim();
     if (!name) return;
     const id = `p-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
     setStore((prev) => ({
@@ -315,11 +327,11 @@ const Index = () => {
     }));
     setResults([]);
     setSelectedId(null);
-    toast.success(`Profile "${name}" created`);
+    toast.success(t.profileCreated(name));
   };
 
   const renameProfile = () => {
-    const name = window.prompt("Rename profile", activeProfile.name)?.trim();
+    const name = window.prompt(t.profilePromptRename, activeProfile.name)?.trim();
     if (!name) return;
     setStore((prev) => ({
       ...prev,
@@ -331,10 +343,10 @@ const Index = () => {
 
   const deleteProfile = () => {
     if (store.profiles.length <= 1) {
-      toast.error("Can't delete the only profile");
+      toast.error(t.cantDeleteOnlyProfile);
       return;
     }
-    if (!window.confirm(`Delete profile "${activeProfile.name}"?`)) return;
+    if (!window.confirm(t.confirmDeleteProfile(activeProfile.name))) return;
     setStore((prev) => {
       const remaining = prev.profiles.filter((p) => p.id !== prev.activeId);
       return { profiles: remaining, activeId: remaining[0].id };
@@ -359,23 +371,23 @@ const Index = () => {
               : "glass-button px-3 py-1.5 text-xs"
           }
         >
-          Copy ▾
+          {t.copy} ▾
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="glass-panel border-0">
-        <DropdownMenuLabel>Copy as…</DropdownMenuLabel>
+        <DropdownMenuLabel>{t.copyAs}</DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={() => copyValues(values, "newline")}>
-          Newline-separated
+          {t.newline}
         </DropdownMenuItem>
         <DropdownMenuItem onClick={() => copyValues(values, "comma")}>
-          Comma-separated
+          {t.comma}
         </DropdownMenuItem>
         <DropdownMenuItem onClick={() => copyValues(values, "comma-space")}>
-          Comma + space
+          {t.commaSpace}
         </DropdownMenuItem>
         <DropdownMenuItem onClick={() => copyValues(values, "space")}>
-          Space-separated
+          {t.space}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
@@ -384,12 +396,34 @@ const Index = () => {
   return (
     <main className="min-h-screen px-4 py-10 md:py-16">
       <div className="mx-auto w-full max-w-xl">
+        <div className="mb-4 flex justify-end">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="glass-button px-3 py-1.5 text-xs">
+                {lang === "ckb" ? t.kurdishCentral : t.english} ▾
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="glass-panel border-0">
+              <DropdownMenuLabel>{t.language}</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => setLang("ckb")}>
+                <span className="flex-1">{t.kurdishCentral}</span>
+                {lang === "ckb" && <span>✓</span>}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setLang("en")}>
+                <span className="flex-1">{t.english}</span>
+                {lang === "en" && <span>✓</span>}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+
         <header className="mb-8 text-center">
           <h1 className="text-3xl md:text-4xl font-semibold tracking-tight">
-            Integer Splitter
+            {t.title}
           </h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            Generate random whole numbers that sum to an exact total.
+            {t.subtitle}
           </p>
         </header>
 
@@ -397,7 +431,7 @@ const Index = () => {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <label className="block">
               <span className="mb-2 block text-sm text-muted-foreground">
-                Number of rows
+                {t.rows}
               </span>
               <input
                 inputMode="numeric"
@@ -405,12 +439,13 @@ const Index = () => {
                 value={rows}
                 onChange={(e) => setRows(e.target.value.replace(/[^\d]/g, ""))}
                 className="glass-input"
-                placeholder="e.g. 10"
+                placeholder={t.rowsPlaceholder}
+                dir="ltr"
               />
             </label>
             <label className="block">
               <span className="mb-2 block text-sm text-muted-foreground">
-                Target total
+                {t.total}
               </span>
               <input
                 inputMode="numeric"
@@ -418,12 +453,13 @@ const Index = () => {
                 value={total}
                 onChange={(e) => setTotal(e.target.value.replace(/[^\d-]/g, ""))}
                 className="glass-input"
-                placeholder="e.g. 1000"
+                placeholder={t.totalPlaceholder}
+                dir="ltr"
               />
             </label>
           </div>
 
-          {check.level !== "ok" && check.message && (
+          {check.level !== "ok" && checkMessage && (
             <div
               className="mt-4 rounded-xl border p-3 text-sm"
               style={{
@@ -441,15 +477,15 @@ const Index = () => {
               <div className="flex items-start gap-2">
                 <span aria-hidden>{check.level === "block" ? "⛔" : "⚠️"}</span>
                 <div className="flex-1">
-                  <div>{check.message}</div>
-                  {check.suggestion && (
+                  <div>{checkMessage}</div>
+                  {check.suggestion && suggestionLabel && (
                     <button
                       type="button"
                       onClick={applySuggestion}
-                      className="mt-2 underline underline-offset-2 hover:text-aqua"
+                      className="mt-2 underline underline-offset-2"
                       style={{ color: "hsl(var(--aqua-glow))" }}
                     >
-                      {check.suggestion.label}
+                      {suggestionLabel}
                     </button>
                   )}
                 </div>
@@ -462,7 +498,7 @@ const Index = () => {
             className="glass-button mt-6 w-full disabled:opacity-50"
             disabled={check.level === "block"}
           >
-            Generate
+            {t.generate}
           </button>
         </form>
 
@@ -470,8 +506,9 @@ const Index = () => {
           <section className="glass-panel mt-6 p-6 md:p-8">
             <div className="mb-4 flex items-center justify-between gap-4">
               <div className="text-sm text-muted-foreground">
-                <span className="text-foreground font-medium">{results.length}</span> rows ·
-                sum <span className="text-foreground font-medium">{sum}</span>
+                <span className="text-foreground font-medium">{t.rowsLabel(results.length)}</span>
+                {" · "}
+                <span className="text-foreground font-medium">{t.sumLabel(sum)}</span>
               </div>
               {copyMenu(results, "lg")}
             </div>
@@ -479,6 +516,7 @@ const Index = () => {
             <div
               className="max-h-[60vh] overflow-y-auto rounded-xl border"
               style={{ borderColor: "hsl(var(--aqua) / 0.18)" }}
+              dir="ltr"
             >
               <table className="w-full">
                 <tbody>
@@ -502,9 +540,9 @@ const Index = () => {
         <section className="glass-panel mt-6 p-6 md:p-8">
           <div className="mb-4 flex items-center justify-between gap-3 flex-wrap">
             <div>
-              <h2 className="text-base font-medium">History</h2>
+              <h2 className="text-base font-medium">{t.history}</h2>
               <p className="text-xs text-muted-foreground">
-                {history.length} of {HISTORY_LIMIT} kept locally
+                {t.historyKept(history.length, HISTORY_LIMIT)}
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -515,7 +553,7 @@ const Index = () => {
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="glass-panel border-0 min-w-[200px]">
-                  <DropdownMenuLabel>Profiles</DropdownMenuLabel>
+                  <DropdownMenuLabel>{t.profiles}</DropdownMenuLabel>
                   <DropdownMenuSeparator />
                   {store.profiles.map((p) => (
                     <DropdownMenuItem
@@ -528,16 +566,16 @@ const Index = () => {
                   ))}
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={createProfile}>
-                    + New profile…
+                    {t.newProfile}
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={renameProfile}>
-                    Rename current…
+                    {t.renameProfile}
                   </DropdownMenuItem>
                   <DropdownMenuItem
                     onClick={deleteProfile}
                     className="text-destructive focus:text-destructive"
                   >
-                    Delete current
+                    {t.deleteProfile}
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -546,16 +584,14 @@ const Index = () => {
                   onClick={clearHistory}
                   className="glass-button px-4 py-2 text-xs"
                 >
-                  Clear
+                  {t.clear}
                 </button>
               )}
             </div>
           </div>
 
           {history.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No generations yet in this profile.
-            </p>
+            <p className="text-sm text-muted-foreground">{t.noHistory}</p>
           ) : (
             <ul className="space-y-2">
               {history.map((entry) => {
@@ -576,12 +612,12 @@ const Index = () => {
                     <div className="flex items-center gap-2 p-3">
                       <button
                         onClick={() => loadEntry(entry)}
-                        className="flex-1 text-left min-w-0"
+                        className="flex-1 text-start min-w-0"
                       >
                         <div className="text-sm font-medium tabular-nums">
-                          {entry.rows} rows · sum {entry.total}
+                          {t.rowsLabel(entry.rows)} · {t.sumLabel(entry.total)}
                         </div>
-                        <div className="text-xs text-muted-foreground font-mono truncate">
+                        <div className="text-xs text-muted-foreground font-mono truncate" dir="ltr">
                           {entry.values.slice(0, 6).join(", ")}
                           {entry.values.length > 6 ? "…" : ""}
                         </div>
@@ -593,7 +629,7 @@ const Index = () => {
                       <button
                         onClick={() => removeEntry(entry.id)}
                         className="rounded-lg px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground"
-                        aria-label="Remove entry"
+                        aria-label={t.removeEntry}
                       >
                         ✕
                       </button>
