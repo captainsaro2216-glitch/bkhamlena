@@ -111,36 +111,70 @@ function precheck(n: number, t: number): Precheck {
       message: "Only 1 row — the single value will equal the total exactly.",
     };
   }
+
+  // Mirror generator: spread = max(1, floor(|mean| * 0.35)); jitter ∈ [-spread, +spread].
   const absMean = Math.abs(t) / n;
-  if (absMean < 1) {
-    // e.g. 100 rows summing to 5 — most values must be 0.
-    const suggestedTotal = n * 5;
+  const spread = Math.max(1, Math.floor(absMean * 0.35));
+  const distinctJitter = 2 * spread + 1; // possible distinct base values before sum-fix
+
+  // Expected number of unique values when drawing n samples uniformly from
+  // `distinctJitter` buckets: distinctJitter * (1 - (1 - 1/distinctJitter)^n).
+  const expectedUnique =
+    distinctJitter * (1 - Math.pow(1 - 1 / distinctJitter, n));
+  // Expected size of the most-common bucket ≈ n / distinctJitter (rounded up).
+  const expectedMaxRepeat = Math.max(1, Math.ceil(n / distinctJitter));
+  const repeatRatio = expectedMaxRepeat / n; // 1.0 = all same
+
+  const sign = t < 0 ? -1 : 1;
+  const targetForGoodVariety = (avg: number) =>
+    sign * Math.max(1, Math.round(n * avg));
+
+  // Block-ish: only one possible base value → results will be essentially flat.
+  if (distinctJitter <= 1 || expectedUnique < 2) {
+    const suggested = targetForGoodVariety(15);
     return {
       level: "warn",
       message:
-        "Average per row is below 1. Most values will be 0 or 1, so results won't look varied.",
+        "Estimated variation is ~0 — every row will be the same or differ by ±1.",
       suggestion: {
         rows: n,
-        total: t < 0 ? -suggestedTotal : suggestedTotal,
-        label: `Use total ${t < 0 ? -suggestedTotal : suggestedTotal} (avg 5/row)`,
+        total: suggested,
+        label: `Use total ${suggested} for visible variety`,
       },
     };
   }
-  if (absMean < 3) {
-    const suggestedTotal = n * 10;
+
+  // Too many repeats: dominant value covers more than ~60% of rows.
+  if (repeatRatio > 0.6) {
+    const suggested = targetForGoodVariety(15);
     return {
       level: "warn",
-      message:
-        "Average per row is very small — variance will be limited (jitter rounds to ±1).",
+      message: `Most rows (~${Math.round(repeatRatio * 100)}%) will share the same value — results will look flat.`,
       suggestion: {
         rows: n,
-        total: t < 0 ? -suggestedTotal : suggestedTotal,
-        label: `Use total ${t < 0 ? -suggestedTotal : suggestedTotal} for more variety`,
+        total: suggested,
+        label: `Use total ${suggested} for more variety`,
       },
     };
   }
+
+  // Low unique-value count relative to row count.
+  if (n >= 5 && expectedUnique / n < 0.35 && expectedUnique < 6) {
+    const suggested = targetForGoodVariety(20);
+    return {
+      level: "warn",
+      message: `Only ~${Math.round(expectedUnique)} distinct values expected across ${n} rows.`,
+      suggestion: {
+        rows: n,
+        total: suggested,
+        label: `Use total ${suggested} for richer spread`,
+      },
+    };
+  }
+
   return { level: "ok" };
 }
+
 
 type CopyFormat = "newline" | "comma" | "space" | "comma-space";
 
