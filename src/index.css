@@ -8,8 +8,17 @@ All colors MUST be HSL.
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    /* Deep ocean teal background, laser aqua accent */
+    --background: 180 51% 12%;
+    --background-deep: 180 55% 8%;
+    --foreground: 180 30% 96%;
+
+    --aqua: 175 88% 56%;
+    --aqua-foreground: 180 60% 8%;
+    --aqua-glow: 175 95% 65%;
+
+    --glass: 180 40% 60%;
+    --glass-border: 175 80% 60%;
 
     --card: 0 0% 100%;
     --card-foreground: 222.2 84% 4.9%;
