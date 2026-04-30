@@ -187,6 +187,7 @@ function formatTime(ts: number) {
 }
 
 const Index = () => {
+  const { t, lang, setLang } = useI18n();
   const [rows, setRows] = useState<string>("10");
   const [total, setTotal] = useState<string>("1000");
   const [results, setResults] = useState<number[]>([]);
@@ -212,9 +213,31 @@ const Index = () => {
   const validN = /^\d+$/.test(rows.trim());
   const validT = /^-?\d+$/.test(total.trim());
   const check: Precheck = useMemo(() => {
-    if (!validN || !validT) return { level: "ok" };
+    if (!validN || !validT) return { level: "ok", code: "ok" };
     return precheck(parsedN, parsedT);
   }, [parsedN, parsedT, validN, validT]);
+
+  const checkMessage = (() => {
+    switch (check.code) {
+      case "single_row": return t.warnSingleRow;
+      case "flat": return t.warnFlat;
+      case "repeats": return t.warnRepeats(check.data?.pct ?? 0);
+      case "low_unique": return t.warnLowUnique(check.data?.unique ?? 0, check.data?.n ?? 0);
+      case "block_rows": return t.blockRows;
+      case "block_total": return t.blockTotal;
+      default: return "";
+    }
+  })();
+
+  const suggestionLabel = (() => {
+    if (!check.suggestion) return "";
+    switch (check.code) {
+      case "flat": return t.warnFlatSuggest(check.suggestion.total);
+      case "repeats": return t.warnRepeatsSuggest(check.suggestion.total);
+      case "low_unique": return t.warnLowUniqueSuggest(check.suggestion.total);
+      default: return "";
+    }
+  })();
 
   const updateActiveProfile = (updater: (p: Profile) => Profile) => {
     setStore((prev) => ({
