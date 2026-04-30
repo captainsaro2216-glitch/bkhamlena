@@ -396,12 +396,34 @@ const Index = () => {
   return (
     <main className="min-h-screen px-4 py-10 md:py-16">
       <div className="mx-auto w-full max-w-xl">
+        <div className="mb-4 flex justify-end">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="glass-button px-3 py-1.5 text-xs">
+                {lang === "ckb" ? t.kurdishCentral : t.english} ▾
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="glass-panel border-0">
+              <DropdownMenuLabel>{t.language}</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => setLang("ckb")}>
+                <span className="flex-1">{t.kurdishCentral}</span>
+                {lang === "ckb" && <span>✓</span>}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setLang("en")}>
+                <span className="flex-1">{t.english}</span>
+                {lang === "en" && <span>✓</span>}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+
         <header className="mb-8 text-center">
           <h1 className="text-3xl md:text-4xl font-semibold tracking-tight">
-            Integer Splitter
+            {t.title}
           </h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            Generate random whole numbers that sum to an exact total.
+            {t.subtitle}
           </p>
         </header>
 
@@ -409,7 +431,7 @@ const Index = () => {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <label className="block">
               <span className="mb-2 block text-sm text-muted-foreground">
-                Number of rows
+                {t.rows}
               </span>
               <input
                 inputMode="numeric"
@@ -417,12 +439,13 @@ const Index = () => {
                 value={rows}
                 onChange={(e) => setRows(e.target.value.replace(/[^\d]/g, ""))}
                 className="glass-input"
-                placeholder="e.g. 10"
+                placeholder={t.rowsPlaceholder}
+                dir="ltr"
               />
             </label>
             <label className="block">
               <span className="mb-2 block text-sm text-muted-foreground">
-                Target total
+                {t.total}
               </span>
               <input
                 inputMode="numeric"
@@ -430,12 +453,13 @@ const Index = () => {
                 value={total}
                 onChange={(e) => setTotal(e.target.value.replace(/[^\d-]/g, ""))}
                 className="glass-input"
-                placeholder="e.g. 1000"
+                placeholder={t.totalPlaceholder}
+                dir="ltr"
               />
             </label>
           </div>
 
-          {check.level !== "ok" && check.message && (
+          {check.level !== "ok" && checkMessage && (
             <div
               className="mt-4 rounded-xl border p-3 text-sm"
               style={{
@@ -453,15 +477,15 @@ const Index = () => {
               <div className="flex items-start gap-2">
                 <span aria-hidden>{check.level === "block" ? "⛔" : "⚠️"}</span>
                 <div className="flex-1">
-                  <div>{check.message}</div>
-                  {check.suggestion && (
+                  <div>{checkMessage}</div>
+                  {check.suggestion && suggestionLabel && (
                     <button
                       type="button"
                       onClick={applySuggestion}
-                      className="mt-2 underline underline-offset-2 hover:text-aqua"
+                      className="mt-2 underline underline-offset-2"
                       style={{ color: "hsl(var(--aqua-glow))" }}
                     >
-                      {check.suggestion.label}
+                      {suggestionLabel}
                     </button>
                   )}
                 </div>
@@ -474,7 +498,7 @@ const Index = () => {
             className="glass-button mt-6 w-full disabled:opacity-50"
             disabled={check.level === "block"}
           >
-            Generate
+            {t.generate}
           </button>
         </form>
 
@@ -482,8 +506,9 @@ const Index = () => {
           <section className="glass-panel mt-6 p-6 md:p-8">
             <div className="mb-4 flex items-center justify-between gap-4">
               <div className="text-sm text-muted-foreground">
-                <span className="text-foreground font-medium">{results.length}</span> rows ·
-                sum <span className="text-foreground font-medium">{sum}</span>
+                <span className="text-foreground font-medium">{t.rowsLabel(results.length)}</span>
+                {" · "}
+                <span className="text-foreground font-medium">{t.sumLabel(sum)}</span>
               </div>
               {copyMenu(results, "lg")}
             </div>
@@ -491,6 +516,7 @@ const Index = () => {
             <div
               className="max-h-[60vh] overflow-y-auto rounded-xl border"
               style={{ borderColor: "hsl(var(--aqua) / 0.18)" }}
+              dir="ltr"
             >
               <table className="w-full">
                 <tbody>
@@ -514,9 +540,9 @@ const Index = () => {
         <section className="glass-panel mt-6 p-6 md:p-8">
           <div className="mb-4 flex items-center justify-between gap-3 flex-wrap">
             <div>
-              <h2 className="text-base font-medium">History</h2>
+              <h2 className="text-base font-medium">{t.history}</h2>
               <p className="text-xs text-muted-foreground">
-                {history.length} of {HISTORY_LIMIT} kept locally
+                {t.historyKept(history.length, HISTORY_LIMIT)}
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -527,7 +553,7 @@ const Index = () => {
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="glass-panel border-0 min-w-[200px]">
-                  <DropdownMenuLabel>Profiles</DropdownMenuLabel>
+                  <DropdownMenuLabel>{t.profiles}</DropdownMenuLabel>
                   <DropdownMenuSeparator />
                   {store.profiles.map((p) => (
                     <DropdownMenuItem
@@ -540,16 +566,16 @@ const Index = () => {
                   ))}
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={createProfile}>
-                    + New profile…
+                    {t.newProfile}
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={renameProfile}>
-                    Rename current…
+                    {t.renameProfile}
                   </DropdownMenuItem>
                   <DropdownMenuItem
                     onClick={deleteProfile}
                     className="text-destructive focus:text-destructive"
                   >
-                    Delete current
+                    {t.deleteProfile}
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -558,16 +584,14 @@ const Index = () => {
                   onClick={clearHistory}
                   className="glass-button px-4 py-2 text-xs"
                 >
-                  Clear
+                  {t.clear}
                 </button>
               )}
             </div>
           </div>
 
           {history.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No generations yet in this profile.
-            </p>
+            <p className="text-sm text-muted-foreground">{t.noHistory}</p>
           ) : (
             <ul className="space-y-2">
               {history.map((entry) => {
@@ -588,12 +612,12 @@ const Index = () => {
                     <div className="flex items-center gap-2 p-3">
                       <button
                         onClick={() => loadEntry(entry)}
-                        className="flex-1 text-left min-w-0"
+                        className="flex-1 text-start min-w-0"
                       >
                         <div className="text-sm font-medium tabular-nums">
-                          {entry.rows} rows · sum {entry.total}
+                          {t.rowsLabel(entry.rows)} · {t.sumLabel(entry.total)}
                         </div>
-                        <div className="text-xs text-muted-foreground font-mono truncate">
+                        <div className="text-xs text-muted-foreground font-mono truncate" dir="ltr">
                           {entry.values.slice(0, 6).join(", ")}
                           {entry.values.length > 6 ? "…" : ""}
                         </div>
@@ -605,7 +629,7 @@ const Index = () => {
                       <button
                         onClick={() => removeEntry(entry.id)}
                         className="rounded-lg px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground"
-                        aria-label="Remove entry"
+                        aria-label={t.removeEntry}
                       >
                         ✕
                       </button>
