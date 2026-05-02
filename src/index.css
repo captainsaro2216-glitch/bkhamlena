@@ -170,5 +170,48 @@
   .glass-button:active {
     background: linear-gradient(135deg, hsl(var(--aqua) / 0.7), hsl(var(--aqua) / 0.35));
   }
+
+  /* Distinct submit button: warm amber with reverse hover */
+  .submit-button {
+    @apply relative rounded-xl border px-6 py-3 font-semibold transition-all duration-300;
+    --amber: 35 90% 55%;
+    --amber-glow: 40 100% 65%;
+    background: linear-gradient(
+      135deg,
+      hsl(var(--amber) / 0.55) 0%,
+      hsl(var(--amber) / 0.25) 50%,
+      hsl(var(--amber-glow) / 0.45) 100%
+    );
+    border-color: hsl(var(--amber-glow) / 0.75);
+    color: hsl(40 30% 98%);
+    backdrop-filter: blur(14px) saturate(200%);
+    box-shadow:
+      inset 0 1px 0 hsl(var(--foreground) / 0.22),
+      inset 0 -1px 0 hsl(var(--amber) / 0.3),
+      0 0 14px hsl(var(--amber) / 0.28),
+      0 4px 14px -4px hsl(var(--amber) / 0.35);
+    text-shadow: 0 0 8px hsl(var(--amber) / 0.4);
+  }
+  /* Reverse hover: fill drains, text takes the amber color, ring stays */
+  .submit-button:hover {
+    background: linear-gradient(
+      135deg,
+      hsl(var(--amber) / 0.04) 0%,
+      hsl(var(--background-deep) / 0.6) 50%,
+      hsl(var(--amber) / 0.04) 100%
+    );
+    border-color: hsl(var(--amber-glow) / 0.95);
+    color: hsl(var(--amber-glow));
+    box-shadow:
+      inset 0 0 0 1px hsl(var(--amber-glow) / 0.5),
+      inset 0 0 18px hsl(var(--amber) / 0.18),
+      0 0 22px hsl(var(--amber) / 0.45),
+      0 6px 18px -4px hsl(var(--amber) / 0.5);
+    text-shadow: 0 0 10px hsl(var(--amber-glow) / 0.7);
+  }
+  .submit-button:active {
+    background: linear-gradient(135deg, hsl(var(--amber) / 0.7), hsl(var(--amber) / 0.35));
+    color: hsl(40 30% 98%);
+  }
 }
 
