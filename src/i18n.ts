@@ -150,6 +150,7 @@ const ckb: Dict = {
   kurdishCentral: "کوردیی ناوەندی",
   toastCopied: (label) => `کۆپی کرا (${label})`,
   toastCopyFailed: "کۆپیکردن سەرکەوتوو نەبوو",
+  toastCopyFailedFormat: (label) => `کۆپیکردن سەرکەوتوو نەبوو (${label})`,
   toastRowsInvalid: "ڕیزەکان دەبێت ژمارەیەکی تەواوی پۆزەتیڤ بن",
   toastTotalInvalid: "کۆی ئامانج دەبێت ژمارەی تەواو بێت (بێ کەسرە)",
   warnSingleRow: "تەنها ١ ڕیز — بەهای تاکە ڕیز بە تەواوی یەکسان دەبێت لەگەڵ کۆ.",
