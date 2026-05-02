@@ -5,13 +5,13 @@
 @layer base {
   :root {
     /* Deep ocean teal background, laser aqua accent */
-    --background: 180 51% 12%;
-    --background-deep: 180 55% 8%;
+    --background: 180 51% 8%;
+    --background-deep: 180 55% 5%;
     --foreground: 180 30% 96%;
 
-    --aqua: 175 88% 56%;
+    --aqua: 175 70% 42%;
     --aqua-foreground: 180 60% 8%;
-    --aqua-glow: 175 95% 65%;
+    --aqua-glow: 175 80% 52%;
 
     --card: 180 45% 14%;
     --card-foreground: 180 30% 96%;
