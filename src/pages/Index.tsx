@@ -514,7 +514,7 @@ const Index = () => {
 
           <button
             type="submit"
-            className="glass-button mt-6 w-full disabled:opacity-50"
+            className="submit-button mt-6 w-full disabled:opacity-50"
             disabled={check.level === "block"}
           >
             {t.generate}
