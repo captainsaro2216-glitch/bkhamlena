@@ -94,9 +94,9 @@
     padding: 1px;
     background: linear-gradient(
       135deg,
-      hsl(var(--aqua-glow) / 0.9),
-      hsl(var(--aqua) / 0.2) 40%,
-      hsl(var(--aqua-glow) / 0.7)
+      hsl(var(--aqua-glow) / 0.5),
+      hsl(var(--aqua) / 0.12) 40%,
+      hsl(var(--aqua-glow) / 0.4)
     );
     -webkit-mask:
       linear-gradient(#000 0 0) content-box,
