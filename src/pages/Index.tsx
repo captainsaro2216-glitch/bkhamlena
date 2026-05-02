@@ -188,8 +188,8 @@ function formatTime(ts: number) {
 
 const Index = () => {
   const { t, lang, setLang } = useI18n();
-  const [rows, setRows] = useState<string>("10");
-  const [total, setTotal] = useState<string>("1000");
+  const [rows, setRows] = useState<string>("");
+  const [total, setTotal] = useState<string>("");
   const [results, setResults] = useState<number[]>([]);
   const [store, setStore] = useState<Store>(() => loadStore());
   const [selectedId, setSelectedId] = useState<string | null>(null);
