@@ -15,10 +15,13 @@ export type Dict = {
   sumLabel: (n: number) => string;
   copy: string;
   copyAs: string;
+  copyMenuAria: string;
+  copyTriggerAria: string;
   newline: string;
   comma: string;
   commaSpace: string;
   space: string;
+  copyFormatAria: (label: string) => string;
   history: string;
   historyKept: (n: number, max: number) => string;
   noHistory: string;
@@ -39,6 +42,7 @@ export type Dict = {
   // Toasts
   toastCopied: (label: string) => string;
   toastCopyFailed: string;
+  toastCopyFailedFormat: (label: string) => string;
   toastRowsInvalid: string;
   toastTotalInvalid: string;
   // Pre-check
@@ -66,6 +70,9 @@ const en: Dict = {
   sumLabel: (n) => `sum ${n}`,
   copy: "Copy",
   copyAs: "Copy as…",
+  copyMenuAria: "Copy format options",
+  copyTriggerAria: "Open copy format menu",
+  copyFormatAria: (label) => `Copy as ${label}`,
   newline: "Newline-separated",
   comma: "Comma-separated",
   commaSpace: "Comma + space",
@@ -89,6 +96,7 @@ const en: Dict = {
   kurdishCentral: "کوردیی ناوەندی",
   toastCopied: (label) => `Copied (${label})`,
   toastCopyFailed: "Copy failed",
+  toastCopyFailedFormat: (label) => `Copy failed (${label})`,
   toastRowsInvalid: "Rows must be a positive integer",
   toastTotalInvalid: "Target total must be an integer (no decimals)",
   warnSingleRow: "Only 1 row — the single value will equal the total exactly.",
@@ -116,6 +124,9 @@ const ckb: Dict = {
   sumLabel: (n) => `کۆ ${n}`,
   copy: "کۆپی",
   copyAs: "کۆپی بکە وەک…",
+  copyMenuAria: "بژاردەکانی شێوازی کۆپی",
+  copyTriggerAria: "کردنەوەی لیستی شێوازی کۆپی",
+  copyFormatAria: (label) => `کۆپی بکە وەک ${label}`,
   newline: "بە دێڕی نوێ جیاکراوە",
   comma: "بە کۆما جیاکراوە",
   commaSpace: "کۆما و بۆشایی",
@@ -139,6 +150,7 @@ const ckb: Dict = {
   kurdishCentral: "کوردیی ناوەندی",
   toastCopied: (label) => `کۆپی کرا (${label})`,
   toastCopyFailed: "کۆپیکردن سەرکەوتوو نەبوو",
+  toastCopyFailedFormat: (label) => `کۆپیکردن سەرکەوتوو نەبوو (${label})`,
   toastRowsInvalid: "ڕیزەکان دەبێت ژمارەیەکی تەواوی پۆزەتیڤ بن",
   toastTotalInvalid: "کۆی ئامانج دەبێت ژمارەی تەواو بێت (بێ کەسرە)",
   warnSingleRow: "تەنها ١ ڕیز — بەهای تاکە ڕیز بە تەواوی یەکسان دەبێت لەگەڵ کۆ.",
