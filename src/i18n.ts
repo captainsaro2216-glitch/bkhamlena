@@ -15,10 +15,13 @@ export type Dict = {
   sumLabel: (n: number) => string;
   copy: string;
   copyAs: string;
+  copyMenuAria: string;
+  copyTriggerAria: string;
   newline: string;
   comma: string;
   commaSpace: string;
   space: string;
+  copyFormatAria: (label: string) => string;
   history: string;
   historyKept: (n: number, max: number) => string;
   noHistory: string;
