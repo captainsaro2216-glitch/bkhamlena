@@ -96,6 +96,7 @@ const en: Dict = {
   kurdishCentral: "کوردیی ناوەندی",
   toastCopied: (label) => `Copied (${label})`,
   toastCopyFailed: "Copy failed",
+  toastCopyFailedFormat: (label) => `Copy failed (${label})`,
   toastRowsInvalid: "Rows must be a positive integer",
   toastTotalInvalid: "Target total must be an integer (no decimals)",
   warnSingleRow: "Only 1 row — the single value will equal the total exactly.",
