@@ -42,6 +42,7 @@ export type Dict = {
   // Toasts
   toastCopied: (label: string) => string;
   toastCopyFailed: string;
+  toastCopyFailedFormat: (label: string) => string;
   toastRowsInvalid: string;
   toastTotalInvalid: string;
   // Pre-check
