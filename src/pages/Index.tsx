@@ -365,6 +365,7 @@ const Index = () => {
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button
+          aria-label={t.copyTriggerAria}
           className={
             size === "lg"
               ? "glass-button px-5 py-2 text-sm"
@@ -374,19 +375,35 @@ const Index = () => {
           {t.copy} ▾
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="glass-panel border-0">
+      <DropdownMenuContent
+        align="end"
+        aria-label={t.copyMenuAria}
+        className="glass-panel border-0"
+      >
         <DropdownMenuLabel>{t.copyAs}</DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={() => copyValues(values, "newline")}>
+        <DropdownMenuItem
+          aria-label={t.copyFormatAria(t.newline)}
+          onClick={() => copyValues(values, "newline")}
+        >
           {t.newline}
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => copyValues(values, "comma")}>
+        <DropdownMenuItem
+          aria-label={t.copyFormatAria(t.comma)}
+          onClick={() => copyValues(values, "comma")}
+        >
           {t.comma}
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => copyValues(values, "comma-space")}>
+        <DropdownMenuItem
+          aria-label={t.copyFormatAria(t.commaSpace)}
+          onClick={() => copyValues(values, "comma-space")}
+        >
           {t.commaSpace}
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => copyValues(values, "space")}>
+        <DropdownMenuItem
+          aria-label={t.copyFormatAria(t.space)}
+          onClick={() => copyValues(values, "space")}
+        >
           {t.space}
         </DropdownMenuItem>
       </DropdownMenuContent>
