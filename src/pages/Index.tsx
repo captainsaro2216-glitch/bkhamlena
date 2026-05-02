@@ -273,6 +273,8 @@ const Index = () => {
       history: [entry, ...p.history].slice(0, HISTORY_LIMIT),
     }));
     setSelectedId(entry.id);
+    setRows("");
+    setTotal("");
   };
 
   const copyValues = async (values: number[], format: CopyFormat) => {
