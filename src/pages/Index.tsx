@@ -277,17 +277,17 @@ const Index = () => {
 
   const copyValues = async (values: number[], format: CopyFormat) => {
     if (!values.length) return;
+    const labels: Record<CopyFormat, string> = {
+      newline: t.newline,
+      comma: t.comma,
+      "comma-space": t.commaSpace,
+      space: t.space,
+    };
     try {
       await navigator.clipboard.writeText(joinValues(values, format));
-      const labels: Record<CopyFormat, string> = {
-        newline: t.newline,
-        comma: t.comma,
-        "comma-space": t.commaSpace,
-        space: t.space,
-      };
       toast.success(t.toastCopied(labels[format]));
     } catch {
-      toast.error(t.toastCopyFailed);
+      toast.error(t.toastCopyFailedFormat(labels[format]));
     }
   };
 
