@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import {
   DropdownMenu,
@@ -415,7 +416,10 @@ const Index = () => {
   return (
     <main className="min-h-screen px-4 py-10 md:py-16">
       <div className="mx-auto w-full max-w-xl">
-        <div className="mb-4 flex justify-end">
+        <div className="mb-4 flex justify-end gap-2">
+          <Link to="/cargo" className="glass-button px-3 py-1.5 text-xs">
+            Cargo Optimizer →
+          </Link>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button className="glass-button px-3 py-1.5 text-xs">
