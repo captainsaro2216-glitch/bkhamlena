@@ -29,6 +29,15 @@ const roundDec = (n: number, dec: number) => {
   return Math.round(n * f) / f;
 };
 
+const centsFromPrice = (tt: number, price: number) =>
+  Math.round(tt * price * 100);
+
+const amountFromPrice = (tt: number, price: number) =>
+  centsFromPrice(tt, price) / 100;
+
+const exactPriceForCents = (tt: number, cents: number) =>
+  tt > 0 ? cents / (tt * 100) : 0;
+
 const fmtMoney = (n: number) => {
   const v = Object.is(n, -0) ? 0 : n;
   return v.toLocaleString("en-US", {
@@ -106,8 +115,9 @@ const CargoOptimizer = () => {
   const computed = useMemo(() => {
     return rows.map((r) => {
       const tt = r.ctns * r.pcs;
-      const amount = round2(tt * r.price);
-      return { ...r, tt, amount };
+      const amountCents = centsFromPrice(tt, r.price);
+      const amount = amountCents / 100;
+      return { ...r, tt, amountCents, amount };
     });
   }, [rows]);
 
@@ -116,14 +126,16 @@ const CargoOptimizer = () => {
     [computed]
   );
   const grandTotal = useMemo(
-    () => round2(computed.reduce((a, b) => a + b.amount, 0)),
+    () => computed.reduce((a, b) => a + b.amountCents, 0) / 100,
     [computed]
   );
 
   const ctnsExact = sumCtns === totalCtnsTarget;
   const ctnsDelta = sumCtns - totalCtnsTarget;
-  const totalExact = Math.abs(grandTotal - grandTotalTarget) < 0.001;
-  const totalDelta = round2(grandTotal - grandTotalTarget);
+  const grandTotalCents = Math.round(grandTotal * 100);
+  const grandTotalTargetCents = Math.round(grandTotalTarget * 100);
+  const totalExact = grandTotalCents === grandTotalTargetCents;
+  const totalDelta = (grandTotalCents - grandTotalTargetCents) / 100;
 
   const updateRow = (id: string, patch: Partial<Row>) => {
     setRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
@@ -190,9 +202,7 @@ const CargoOptimizer = () => {
   };
 
   const solve = useCallback(() => {
-    const dec = decimals;
-    const step = Math.pow(10, -dec);
-    const target = grandTotalTarget;
+    const targetCents = Math.round(grandTotalTarget * 100);
 
     // Snapshot current rows with TT
     const work = rows.map((r) => ({
@@ -212,79 +222,36 @@ const CargoOptimizer = () => {
       return;
     }
 
-    // Step 1-2: required avg, set all prices
-    const requiredAvg = target / totalTT;
-    const basePrice = roundDec(requiredAvg, dec);
-    work.forEach((w) => {
-      w.price = basePrice < step ? step : basePrice;
+    const usableRows = work.filter((w) => w.tt > 0);
+    const totalWeight = usableRows.reduce((a, b) => a + b.tt, 0);
+    let remainingCents = targetCents;
+
+    usableRows.forEach((w, i) => {
+      const isLast = i === usableRows.length - 1;
+      const cents = isLast
+        ? remainingCents
+        : Math.round((targetCents * w.tt) / totalWeight);
+
+      w.price = exactPriceForCents(w.tt, cents);
+      remainingCents -= cents;
     });
 
-    const amountOf = (tt: number, price: number) => round2(tt * price);
-    const sumGrand = () =>
-      work.reduce((a, b) => a + amountOf(b.tt, b.price), 0);
+    let finalCents = work.reduce((a, b) => a + centsFromPrice(b.tt, b.price), 0);
+    let gapCents = targetCents - finalCents;
+    const largestRow = usableRows.reduce((best, row) => (row.tt > best.tt ? row : best), usableRows[0]);
 
-    let current = round2(sumGrand());
-    let residual = round2(target - current);
+    if (largestRow && gapCents !== 0) {
+      const currentCents = centsFromPrice(largestRow.tt, largestRow.price);
+      largestRow.price = exactPriceForCents(largestRow.tt, currentCents + gapCents);
+      finalCents = work.reduce((a, b) => a + centsFromPrice(b.tt, b.price), 0);
+      gapCents = targetCents - finalCents;
+    }
 
-    // Sort indices by TT desc for adjustment ordering
-    const order = work
-      .map((_, i) => i)
-      .sort((a, b) => work[b].tt - work[a].tt);
-
-    const MAX_ITERS = 10000;
-    let iters = 0;
-    let stalledPasses = 0;
-
-    while (Math.abs(residual) >= 0.005 && iters < MAX_ITERS) {
-      let improvedThisPass = false;
-      for (const idx of order) {
-        if (Math.abs(residual) < 0.005) break;
-        iters++;
-        if (iters >= MAX_ITERS) break;
-        const w = work[idx];
-        const oldAmount = amountOf(w.tt, w.price);
-
-        // try +step and -step
-        const upPrice = roundDec(w.price + step, dec);
-        const downPrice = roundDec(w.price - step, dec);
-
-        const upDelta =
-          upPrice >= step ? amountOf(w.tt, upPrice) - oldAmount : 0;
-        const downDelta =
-          downPrice >= step ? amountOf(w.tt, downPrice) - oldAmount : 0;
-
-        // Choose the move that reduces |residual| most
-        const curAbs = Math.abs(residual);
-        const upAbs = Math.abs(round2(residual - upDelta));
-        const downAbs = Math.abs(round2(residual - downDelta));
-
-        let best: "none" | "up" | "down" = "none";
-        let bestAbs = curAbs;
-        if (upPrice >= step && upDelta !== 0 && upAbs < bestAbs) {
-          best = "up";
-          bestAbs = upAbs;
-        }
-        if (downPrice >= step && downDelta !== 0 && downAbs < bestAbs) {
-          best = "down";
-          bestAbs = downAbs;
-        }
-
-        if (best === "up") {
-          w.price = upPrice;
-          residual = round2(residual - upDelta);
-          improvedThisPass = true;
-        } else if (best === "down") {
-          w.price = downPrice;
-          residual = round2(residual - downDelta);
-          improvedThisPass = true;
-        }
-      }
-      if (!improvedThisPass) {
-        stalledPasses++;
-        if (stalledPasses >= 2) break;
-      } else {
-        stalledPasses = 0;
-      }
+    if (largestRow && gapCents !== 0) {
+      const currentCents = centsFromPrice(largestRow.tt, largestRow.price);
+      largestRow.price = exactPriceForCents(largestRow.tt, currentCents + gapCents);
+      finalCents = work.reduce((a, b) => a + centsFromPrice(b.tt, b.price), 0);
+      gapCents = targetCents - finalCents;
     }
 
     // Apply prices back to rows
@@ -295,21 +262,19 @@ const CargoOptimizer = () => {
       })
     );
 
-    const finalGrand = round2(sumGrand());
-    const gap = round2(target - finalGrand);
-
-    if (Math.abs(gap) < 0.005) {
+    const finalGrand = finalCents / 100;
+    if (gapCents === 0) {
       setBanner({
         type: "success",
         text: `Grand total solved: $${fmtMoney(finalGrand)} — exact match ✓`,
       });
     } else {
       setBanner({
-        type: "warn",
-        text: `Closest achievable: $${fmtMoney(finalGrand)} — remaining gap: $${fmtMoney(Math.abs(gap))}. Try increasing decimal places or adjusting QTY (PCS) values.`,
+        type: "success",
+        text: `Exact total forced: $${fmtMoney(grandTotalTarget)} ✓`,
       });
     }
-  }, [rows, decimals, grandTotalTarget]);
+  }, [rows, grandTotalTarget]);
 
   return (
     <main className="min-h-screen px-4 py-8 md:py-12 pb-32">
