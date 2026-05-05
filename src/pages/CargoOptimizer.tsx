@@ -29,6 +29,15 @@ const roundDec = (n: number, dec: number) => {
   return Math.round(n * f) / f;
 };
 
+const centsFromPrice = (tt: number, price: number) =>
+  Math.round(tt * price * 100);
+
+const amountFromPrice = (tt: number, price: number) =>
+  centsFromPrice(tt, price) / 100;
+
+const exactPriceForCents = (tt: number, cents: number) =>
+  tt > 0 ? cents / (tt * 100) : 0;
+
 const fmtMoney = (n: number) => {
   const v = Object.is(n, -0) ? 0 : n;
   return v.toLocaleString("en-US", {
@@ -106,8 +115,9 @@ const CargoOptimizer = () => {
   const computed = useMemo(() => {
     return rows.map((r) => {
       const tt = r.ctns * r.pcs;
-      const amount = round2(tt * r.price);
-      return { ...r, tt, amount };
+      const amountCents = centsFromPrice(tt, r.price);
+      const amount = amountCents / 100;
+      return { ...r, tt, amountCents, amount };
     });
   }, [rows]);
 
@@ -116,14 +126,16 @@ const CargoOptimizer = () => {
     [computed]
   );
   const grandTotal = useMemo(
-    () => round2(computed.reduce((a, b) => a + b.amount, 0)),
+    () => computed.reduce((a, b) => a + b.amountCents, 0) / 100,
     [computed]
   );
 
   const ctnsExact = sumCtns === totalCtnsTarget;
   const ctnsDelta = sumCtns - totalCtnsTarget;
-  const totalExact = Math.abs(grandTotal - grandTotalTarget) < 0.001;
-  const totalDelta = round2(grandTotal - grandTotalTarget);
+  const grandTotalCents = Math.round(grandTotal * 100);
+  const grandTotalTargetCents = Math.round(grandTotalTarget * 100);
+  const totalExact = grandTotalCents === grandTotalTargetCents;
+  const totalDelta = (grandTotalCents - grandTotalTargetCents) / 100;
 
   const updateRow = (id: string, patch: Partial<Row>) => {
     setRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
