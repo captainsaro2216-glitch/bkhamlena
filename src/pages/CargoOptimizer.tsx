@@ -202,8 +202,6 @@ const CargoOptimizer = () => {
   };
 
   const solve = useCallback(() => {
-    const dec = decimals;
-    const step = Math.pow(10, -dec);
     const targetCents = Math.round(grandTotalTarget * 100);
 
     // Snapshot current rows with TT
@@ -276,7 +274,7 @@ const CargoOptimizer = () => {
         text: `Exact total forced: $${fmtMoney(grandTotalTarget)} ✓`,
       });
     }
-  }, [rows, decimals, grandTotalTarget]);
+  }, [rows, grandTotalTarget]);
 
   return (
     <main className="min-h-screen px-4 py-8 md:py-12 pb-32">
