@@ -52,33 +52,31 @@ function randomPartition(total: number, parts: number): number[] {
   if (parts <= 0) return [];
   if (parts === 1) return [total];
   if (total < parts) return [];
-  // Generate parts-1 unique breakpoints in [1, total-1]
-  const breakSet = new Set<number>();
-  // If range too small, fall back to sequential
-  const range = total - 1;
-  if (range < parts - 1) {
-    // distribute as evenly as possible
-    const base = Math.floor(total / parts);
-    const rem = total - base * parts;
-    return Array.from({ length: parts }, (_, i) => base + (i < rem ? 1 : 0));
+  // Even base distribution
+  const base = Math.floor(total / parts);
+  const rem = total - base * parts;
+  const arr = Array.from({ length: parts }, (_, i) => base + (i < rem ? 1 : 0));
+  // Apply small jitter (~±12% of base) but keep values nearly similar
+  const jitter = Math.max(1, Math.floor(base * 0.12));
+  for (let i = 0; i < parts - 1; i++) {
+    const delta = Math.floor(Math.random() * (2 * jitter + 1)) - jitter;
+    if (arr[i] + delta >= 1 && arr[parts - 1] - delta >= 1) {
+      arr[i] += delta;
+      arr[parts - 1] -= delta;
+    }
   }
-  while (breakSet.size < parts - 1) {
-    breakSet.add(1 + Math.floor(Math.random() * range));
-  }
-  const breaks = Array.from(breakSet).sort((a, b) => a - b);
-  const result: number[] = [];
-  let prev = 0;
-  for (const b of breaks) {
-    result.push(b - prev);
-    prev = b;
-  }
-  result.push(total - prev);
   // shuffle
-  for (let i = result.length - 1; i > 0; i--) {
+  for (let i = arr.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
-    [result[i], result[j]] = [result[j], result[i]];
+    [arr[i], arr[j]] = [arr[j], arr[i]];
   }
-  return result;
+  return arr;
+}
+
+function gcdN(a: number, b: number): number {
+  a = Math.abs(a); b = Math.abs(b);
+  while (b) { [a, b] = [b, a % b]; }
+  return a;
 }
 
 const CargoOptimizer = () => {
