@@ -182,6 +182,8 @@ const CargoOptimizer = () => {
     setGrandTotalTarget(1119475);
     setNumRows(7);
     setDecimals(3);
+    setMinPrice(0.01);
+    setMaxPrice(100);
     setBanner(null);
   };
 
