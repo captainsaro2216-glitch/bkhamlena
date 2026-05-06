@@ -201,47 +201,85 @@ const CargoOptimizer = () => {
     });
   };
 
-  const solve = useCallback(() => {
+  // Live feasibility check (without mutating rows)
+  const feasibility = useMemo(() => {
     const dec = decimals;
-    const scale = Math.pow(10, dec); // price = k / scale
+    const scale = Math.pow(10, dec);
     const targetCents = Math.round(grandTotalTarget * 100);
 
-    // amountCents_i = tt_i * k_i * 100 / scale  →ç sum(tt_i * k_i) = targetCents * scale / 100
+    if (minPrice <= 0) {
+      return { ok: false, reason: "Min unit price must be greater than 0 (no zero or negative prices allowed)." };
+    }
+    if (maxPrice < minPrice) {
+      return { ok: false, reason: "Max unit price must be ≥ min unit price." };
+    }
     if (dec < 2) {
       const factor = Math.pow(10, 2 - dec);
       if (targetCents % factor !== 0) {
-        setBanner({
-          type: "warn",
-          text: `At ${dec} decimal${dec > 1 ? "s" : ""}, the grand total must be a multiple of $${(factor / 100).toFixed(Math.max(0, 2 - dec))}. Increase decimals or adjust the grand total.`,
-        });
-        return;
+        return {
+          ok: false,
+          reason: `At ${dec} decimal${dec > 1 ? "s" : ""}, the grand total must be a multiple of $${(factor / 100).toFixed(Math.max(0, 2 - dec))}.`,
+        };
       }
     }
+    const T = Math.round((targetCents * scale) / 100);
+    const usable = rows.map((r) => r.ctns * r.pcs).filter((tt) => tt > 0);
+    if (usable.length === 0) return { ok: false, reason: "Total TT (cartons × pcs) is zero." };
+
+    let g = usable[0];
+    for (let i = 1; i < usable.length; i++) g = gcdN(g, usable[i]);
+    if (T % g !== 0) {
+      return {
+        ok: false,
+        reason: `Exact total impossible at ${dec} decimal${dec > 1 ? "s" : ""}: GCD of TT values (${g}) does not divide the scaled target. Add/remove a row or change a QTY (PCS).`,
+      };
+    }
+
+    // Bounds check on k = price * scale
+    const kMin = Math.ceil(minPrice * scale);
+    const kMax = Math.floor(maxPrice * scale);
+    if (kMin < 1) {
+      return { ok: false, reason: "Min unit price too small for chosen decimals." };
+    }
+    if (kMin > kMax) {
+      return { ok: false, reason: "Min/max range yields no valid price at chosen decimals." };
+    }
+    const totalTT = usable.reduce((a, b) => a + b, 0);
+    const lo = usable.reduce((a, tt) => a + tt * kMin, 0);
+    const hi = usable.reduce((a, tt) => a + tt * kMax, 0);
+    if (T < lo || T > hi) {
+      const avg = T / totalTT / scale;
+      return {
+        ok: false,
+        reason: `Required average unit price is $${avg.toFixed(dec)} which is outside the [$${minPrice}, $${maxPrice}] band. Widen the band or change quantities.`,
+      };
+    }
+    return { ok: true as const, reason: "Exact total is achievable with current settings." };
+  }, [rows, grandTotalTarget, decimals, minPrice, maxPrice]);
+
+  const solve = useCallback(() => {
+    if (!feasibility.ok) {
+      setBanner({ type: "warn", text: feasibility.reason });
+      return;
+    }
+    const dec = decimals;
+    const scale = Math.pow(10, dec);
+    const targetCents = Math.round(grandTotalTarget * 100);
     const T = Math.round((targetCents * scale) / 100);
 
     const work = rows.map((r) => ({ id: r.id, tt: r.ctns * r.pcs, k: 0 }));
     const usable = work.filter((w) => w.tt > 0);
-    if (usable.length === 0) {
-      setBanner({ type: "warn", text: "Cannot solve: total TT is zero." });
-      return;
-    }
 
     const tts = usable.map((u) => u.tt);
-    let g = tts[0];
-    for (let i = 1; i < tts.length; i++) g = gcdN(g, tts[i]);
-    if (T % g !== 0) {
-      setBanner({
-        type: "warn",
-        text: `Impossible at ${dec} decimal${dec > 1 ? "s" : ""}: GCD of TT values (${g}) does not divide the target. Add a row, delete a row, or change a QTY (PCS) value.`,
-      });
-      return;
-    }
+    const kMin = Math.ceil(minPrice * scale);
+    const kMax = Math.floor(maxPrice * scale);
 
+    // Initial: clamp to band; start everyone at kMin then push the rest
     const totalTT = tts.reduce((a, b) => a + b, 0);
-    const avgK = T / totalTT;
-    usable.forEach((w) => { w.k = Math.max(1, Math.round(avgK)); });
-    const currentSum = usable.reduce((a, b) => a + b.tt * b.k, 0);
-    const rem = T - currentSum;
+    const avgK = Math.max(kMin, Math.min(kMax, Math.round(T / totalTT)));
+    usable.forEach((w) => { w.k = avgK; });
+    let currentSum = usable.reduce((a, b) => a + b.tt * b.k, 0);
+    let rem = T - currentSum;
 
     // Sequential extended-gcd to solve sum(tt_i * delta_i) = rem
     const n = usable.length;
@@ -267,10 +305,73 @@ const CargoOptimizer = () => {
     deltas[0] = r / tts[0];
     for (let i = 0; i < n; i++) usable[i].k += deltas[i];
 
-    if (usable.some((u) => u.k < 1)) {
+    // Project into [kMin, kMax] while preserving sum(tt_i * k_i) = T.
+    // Repeatedly: pick an out-of-band row, push it toward bound, compensate
+    // by adjusting another row in the opposite direction by (tt_i / tt_j) units.
+    const MAX_ITER = 5000;
+    let iter = 0;
+    const inBand = (k: number) => k >= kMin && k <= kMax;
+
+    while (iter++ < MAX_ITER) {
+      const badIdx = usable.findIndex((u) => !inBand(u.k));
+      if (badIdx === -1) break;
+      const bad = usable[badIdx];
+      const target = bad.k < kMin ? kMin : kMax;
+      const need = target - bad.k; // amount we want to add to bad.k
+      // We need to subtract need * tt_bad / tt_other from some other row.
+      // Find a donor j != badIdx with integer compensation and stays in band.
+      let placed = false;
+      // Try donors with largest slack first
+      const donors = usable
+        .map((u, i) => ({ u, i }))
+        .filter(({ i }) => i !== badIdx)
+        .sort((a, b) => {
+          const slackA = need > 0 ? a.u.k - kMin : kMax - a.u.k;
+          const slackB = need > 0 ? b.u.k - kMin : kMax - b.u.k;
+          return slackB - slackA;
+        });
+
+      for (const { u: donor, i: donorIdx } of donors) {
+        // Compensation: bad.k += d (toward target), donor.k -= d * tt_bad / tt_donor
+        // Need d * tt_bad % tt_donor == 0. Use minimum step that moves bad fully or as much as possible.
+        const lcmDen = donor.tt / gcdN(donor.tt, bad.tt);
+        // step in bad.k that yields integer change in donor.k
+        const stepBad = lcmDen; // positive
+        // direction
+        const dir = need > 0 ? 1 : -1;
+        // how much we can move bad in this direction (toward target)
+        const maxBadMove = dir > 0 ? Math.min(need, kMax - bad.k) : Math.max(need, kMin - bad.k);
+        const stepsMax = Math.floor(Math.abs(maxBadMove) / stepBad);
+        if (stepsMax <= 0) continue;
+        // Donor change per step
+        const donorPerStep = -dir * (stepBad * bad.tt) / donor.tt; // integer
+        // donor in-band constraint
+        let stepsAllowed = stepsMax;
+        if (donorPerStep > 0) {
+          stepsAllowed = Math.min(stepsAllowed, Math.floor((kMax - donor.k) / donorPerStep));
+        } else if (donorPerStep < 0) {
+          stepsAllowed = Math.min(stepsAllowed, Math.floor((donor.k - kMin) / -donorPerStep));
+        }
+        if (stepsAllowed <= 0) continue;
+        bad.k += dir * stepBad * stepsAllowed;
+        donor.k += donorPerStep * stepsAllowed;
+        usable[donorIdx] = donor;
+        placed = true;
+        break;
+      }
+      if (!placed) {
+        setBanner({
+          type: "warn",
+          text: "Could not enforce min/max price band while keeping the exact total. Widen the band, change decimals, or adjust QTY values.",
+        });
+        return;
+      }
+    }
+
+    if (usable.some((u) => u.k < kMin || u.k > kMax)) {
       setBanner({
         type: "warn",
-        text: `Impossible at ${dec} decimal${dec > 1 ? "s" : ""} with current rows (a unit price would be ≤ 0). Add a row, delete a row, or change QTY values.`,
+        text: "Solver hit iteration limit while enforcing price bounds. Widen the min/max band or adjust QTY values.",
       });
       return;
     }
@@ -287,9 +388,9 @@ const CargoOptimizer = () => {
 
     setBanner({
       type: "success",
-      text: `Grand total solved: $${fmtMoney(grandTotalTarget)} — exact match at ${dec} decimal${dec > 1 ? "s" : ""} ✓`,
+      text: `Grand total solved: $${fmtMoney(grandTotalTarget)} — exact at ${dec} decimal${dec > 1 ? "s" : ""}, prices within [$${minPrice}, $${maxPrice}] ✓`,
     });
-  }, [rows, grandTotalTarget, decimals]);
+  }, [rows, grandTotalTarget, decimals, minPrice, maxPrice, feasibility]);
 
   return (
     <main className="min-h-screen px-4 py-8 md:py-12 pb-32">
