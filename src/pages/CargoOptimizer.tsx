@@ -481,6 +481,56 @@ const CargoOptimizer = () => {
             </label>
           </div>
 
+          {/* Price band panel */}
+          <div className="mt-5 grid grid-cols-1 sm:grid-cols-3 gap-4 rounded-xl p-4"
+               style={{ border: "1px solid hsl(var(--aqua) / 0.18)", background: "hsl(var(--aqua) / 0.04)" }}>
+            <label className="block">
+              <span className="mb-2 block text-xs text-muted-foreground uppercase tracking-wide">
+                Min Unit Price (USD)
+              </span>
+              <input
+                type="number"
+                min={Math.pow(10, -decimals)}
+                step={Math.pow(10, -decimals)}
+                value={minPrice}
+                onChange={(e) => {
+                  const n = Number(e.target.value);
+                  setMinPrice(Number.isFinite(n) && n > 0 ? roundDec(n, decimals) : Math.pow(10, -decimals));
+                }}
+                className="glass-input"
+              />
+            </label>
+            <label className="block">
+              <span className="mb-2 block text-xs text-muted-foreground uppercase tracking-wide">
+                Max Unit Price (USD)
+              </span>
+              <input
+                type="number"
+                min={Math.pow(10, -decimals)}
+                step={Math.pow(10, -decimals)}
+                value={maxPrice}
+                onChange={(e) => {
+                  const n = Number(e.target.value);
+                  setMaxPrice(Number.isFinite(n) && n > 0 ? roundDec(n, decimals) : minPrice);
+                }}
+                className="glass-input"
+              />
+            </label>
+            <div className="flex items-end">
+              <div
+                className="w-full rounded-lg px-3 py-2 text-xs"
+                style={{
+                  border: `1px solid hsl(${feasibility.ok ? "142 70% 45%" : "45 90% 55%"} / 0.5)`,
+                  background: `hsl(${feasibility.ok ? "142 70% 45%" : "45 90% 55%"} / 0.08)`,
+                  color: `hsl(${feasibility.ok ? "142 80% 70%" : "45 95% 75%"})`,
+                }}
+              >
+                {feasibility.ok ? "✓ Feasible — " : "⚠ Not feasible — "}
+                {feasibility.reason}
+              </div>
+            </div>
+          </div>
+
           <div className="mt-5 flex flex-wrap gap-2">
             <button onClick={randomizeCartons} className="glass-button px-4 py-2 text-sm">
               🎲 Randomize Cartons
