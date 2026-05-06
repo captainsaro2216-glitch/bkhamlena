@@ -200,79 +200,94 @@ const CargoOptimizer = () => {
   };
 
   const solve = useCallback(() => {
+    const dec = decimals;
+    const scale = Math.pow(10, dec); // price = k / scale
     const targetCents = Math.round(grandTotalTarget * 100);
 
-    // Snapshot current rows with TT
-    const work = rows.map((r) => ({
-      id: r.id,
-      ctns: r.ctns,
-      pcs: r.pcs,
-      tt: r.ctns * r.pcs,
-      price: r.price,
-    }));
+    // amountCents_i = tt_i * k_i * 100 / scale  →ç sum(tt_i * k_i) = targetCents * scale / 100
+    if (dec < 2) {
+      const factor = Math.pow(10, 2 - dec);
+      if (targetCents % factor !== 0) {
+        setBanner({
+          type: "warn",
+          text: `At ${dec} decimal${dec > 1 ? "s" : ""}, the grand total must be a multiple of $${(factor / 100).toFixed(Math.max(0, 2 - dec))}. Increase decimals or adjust the grand total.`,
+        });
+        return;
+      }
+    }
+    const T = Math.round((targetCents * scale) / 100);
 
-    const totalTT = work.reduce((a, b) => a + b.tt, 0);
-    if (totalTT <= 0) {
+    const work = rows.map((r) => ({ id: r.id, tt: r.ctns * r.pcs, k: 0 }));
+    const usable = work.filter((w) => w.tt > 0);
+    if (usable.length === 0) {
+      setBanner({ type: "warn", text: "Cannot solve: total TT is zero." });
+      return;
+    }
+
+    const tts = usable.map((u) => u.tt);
+    let g = tts[0];
+    for (let i = 1; i < tts.length; i++) g = gcdN(g, tts[i]);
+    if (T % g !== 0) {
       setBanner({
         type: "warn",
-        text: "Cannot solve: total TT (cartons × pcs) is zero.",
+        text: `Impossible at ${dec} decimal${dec > 1 ? "s" : ""}: GCD of TT values (${g}) does not divide the target. Add a row, delete a row, or change a QTY (PCS) value.`,
       });
       return;
     }
 
-    const usableRows = work.filter((w) => w.tt > 0);
-    const totalWeight = usableRows.reduce((a, b) => a + b.tt, 0);
-    let remainingCents = targetCents;
+    const totalTT = tts.reduce((a, b) => a + b, 0);
+    const avgK = T / totalTT;
+    usable.forEach((w) => { w.k = Math.max(1, Math.round(avgK)); });
+    const currentSum = usable.reduce((a, b) => a + b.tt * b.k, 0);
+    const rem = T - currentSum;
 
-    usableRows.forEach((w, i) => {
-      const isLast = i === usableRows.length - 1;
-      const cents = isLast
-        ? remainingCents
-        : Math.round((targetCents * w.tt) / totalWeight);
+    // Sequential extended-gcd to solve sum(tt_i * delta_i) = rem
+    const n = usable.length;
+    const prefixG: number[] = [tts[0]];
+    for (let i = 1; i < n; i++) prefixG.push(gcdN(prefixG[i - 1], tts[i]));
 
-      w.price = exactPriceForCents(w.tt, cents);
-      remainingCents -= cents;
-    });
+    const extGcd = (a: number, b: number): [number, number, number] => {
+      if (b === 0) return [a, 1, 0];
+      const [gg, x1, y1] = extGcd(b, a % b);
+      return [gg, y1, x1 - Math.floor(a / b) * y1];
+    };
 
-    let finalCents = work.reduce((a, b) => a + centsFromPrice(b.tt, b.price), 0);
-    let gapCents = targetCents - finalCents;
-    const largestRow = usableRows.reduce((best, row) => (row.tt > best.tt ? row : best), usableRows[0]);
+    const deltas = new Array(n).fill(0);
+    let r = rem;
+    for (let i = n - 1; i >= 1; i--) {
+      const gi = prefixG[i];
+      const [, , y] = extGcd(prefixG[i - 1], tts[i]);
+      const factor = r / gi;
+      const dy = y * factor;
+      deltas[i] = dy;
+      r = r - dy * tts[i];
+    }
+    deltas[0] = r / tts[0];
+    for (let i = 0; i < n; i++) usable[i].k += deltas[i];
 
-    if (largestRow && gapCents !== 0) {
-      const currentCents = centsFromPrice(largestRow.tt, largestRow.price);
-      largestRow.price = exactPriceForCents(largestRow.tt, currentCents + gapCents);
-      finalCents = work.reduce((a, b) => a + centsFromPrice(b.tt, b.price), 0);
-      gapCents = targetCents - finalCents;
+    if (usable.some((u) => u.k < 1)) {
+      setBanner({
+        type: "warn",
+        text: `Impossible at ${dec} decimal${dec > 1 ? "s" : ""} with current rows (a unit price would be ≤ 0). Add a row, delete a row, or change QTY values.`,
+      });
+      return;
     }
 
-    if (largestRow && gapCents !== 0) {
-      const currentCents = centsFromPrice(largestRow.tt, largestRow.price);
-      largestRow.price = exactPriceForCents(largestRow.tt, currentCents + gapCents);
-      finalCents = work.reduce((a, b) => a + centsFromPrice(b.tt, b.price), 0);
-      gapCents = targetCents - finalCents;
-    }
+    const finalById = new Map<string, number>();
+    usable.forEach((u) => finalById.set(u.id, u.k / scale));
 
-    // Apply prices back to rows
     setRows((prev) =>
-      prev.map((r) => {
-        const w = work.find((x) => x.id === r.id);
-        return w ? { ...r, price: w.price } : r;
+      prev.map((r2) => {
+        const p = finalById.get(r2.id);
+        return p !== undefined ? { ...r2, price: p } : r2;
       })
     );
 
-    const finalGrand = finalCents / 100;
-    if (gapCents === 0) {
-      setBanner({
-        type: "success",
-        text: `Grand total solved: $${fmtMoney(finalGrand)} — exact match ✓`,
-      });
-    } else {
-      setBanner({
-        type: "success",
-        text: `Exact total forced: $${fmtMoney(grandTotalTarget)} ✓`,
-      });
-    }
-  }, [rows, grandTotalTarget]);
+    setBanner({
+      type: "success",
+      text: `Grand total solved: $${fmtMoney(grandTotalTarget)} — exact match at ${dec} decimal${dec > 1 ? "s" : ""} ✓`,
+    });
+  }, [rows, grandTotalTarget, decimals]);
 
   return (
     <main className="min-h-screen px-4 py-8 md:py-12 pb-32">
