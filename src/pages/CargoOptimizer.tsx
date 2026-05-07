@@ -87,6 +87,7 @@ const CargoOptimizer = () => {
   const [minPrice, setMinPrice] = useState<number>(0.01);
   const [maxPrice, setMaxPrice] = useState<number>(100);
   const [rows, setRows] = useState<Row[]>(() => makeDefaultRows());
+  const [showAdvanced, setShowAdvanced] = useState<boolean>(false);
   const [banner, setBanner] = useState<{
     type: "success" | "warn" | "info";
     text: string;
@@ -520,6 +521,193 @@ const CargoOptimizer = () => {
     });
   }, [rows, grandTotalTarget, decimals, minPrice, maxPrice, feasibility]);
 
+  // ============ AUTO-FIT PIPELINE (one-click exact invoice) ============
+  const tryPrices = useCallback(
+    (
+      ctnsArr: number[],
+      pcsArr: number[],
+      dec: number,
+      targetCents: number,
+      minP: number,
+      maxP: number,
+    ): number[] | null => {
+      const n = ctnsArr.length;
+      if (n === 0) return null;
+      const scale = Math.pow(10, dec);
+      const T = Math.round((targetCents * scale) / 100);
+      const tts = ctnsArr.map((c, i) => c * pcsArr[i]);
+      if (tts.some((t) => t <= 0)) return null;
+
+      let g = tts[0];
+      for (let i = 1; i < n; i++) g = gcdN(g, tts[i]);
+      if (T % g !== 0) return null;
+
+      const kMin = Math.ceil(minP * scale);
+      const kMax = Math.floor(maxP * scale);
+      if (kMin < 1 || kMin > kMax) return null;
+      const totalTT = tts.reduce((a, b) => a + b, 0);
+      if (T < totalTT * kMin || T > totalTT * kMax) return null;
+
+      const ks = new Array<number>(n);
+      const avgK = Math.max(kMin, Math.min(kMax, Math.round(T / totalTT)));
+      for (let i = 0; i < n; i++) ks[i] = avgK;
+      const rem = T - ks.reduce((a, k, i) => a + k * tts[i], 0);
+
+      const prefixG = [tts[0]];
+      for (let i = 1; i < n; i++) prefixG.push(gcdN(prefixG[i - 1], tts[i]));
+      const extGcd = (a: number, b: number): [number, number, number] => {
+        if (b === 0) return [a, 1, 0];
+        const [gg, x1, y1] = extGcd(b, a % b);
+        return [gg, y1, x1 - Math.floor(a / b) * y1];
+      };
+      const deltas = new Array(n).fill(0);
+      let r = rem;
+      for (let i = n - 1; i >= 1; i--) {
+        const gi = prefixG[i];
+        const [, , y] = extGcd(prefixG[i - 1], tts[i]);
+        const factor = r / gi;
+        const dy = y * factor;
+        deltas[i] = dy;
+        r = r - dy * tts[i];
+      }
+      deltas[0] = r / tts[0];
+      for (let i = 0; i < n; i++) ks[i] += deltas[i];
+
+      const inBand = (k: number) => k >= kMin && k <= kMax;
+      let iter = 0;
+      while (iter++ < 5000) {
+        const badIdx = ks.findIndex((k) => !inBand(k));
+        if (badIdx === -1) break;
+        const target = ks[badIdx] < kMin ? kMin : kMax;
+        const need = target - ks[badIdx];
+        let placed = false;
+        const order = ks
+          .map((_, i) => i)
+          .filter((i) => i !== badIdx)
+          .sort((a, b) => {
+            const sa = need > 0 ? ks[a] - kMin : kMax - ks[a];
+            const sb = need > 0 ? ks[b] - kMin : kMax - ks[b];
+            return sb - sa;
+          });
+        for (const j of order) {
+          const stepBad = tts[j] / gcdN(tts[j], tts[badIdx]);
+          const dir = need > 0 ? 1 : -1;
+          const maxBadMove =
+            dir > 0 ? Math.min(need, kMax - ks[badIdx]) : Math.max(need, kMin - ks[badIdx]);
+          const stepsMax = Math.floor(Math.abs(maxBadMove) / stepBad);
+          if (stepsMax <= 0) continue;
+          const donorPerStep = (-dir * (stepBad * tts[badIdx])) / tts[j];
+          let stepsAllowed = stepsMax;
+          if (donorPerStep > 0) {
+            stepsAllowed = Math.min(stepsAllowed, Math.floor((kMax - ks[j]) / donorPerStep));
+          } else if (donorPerStep < 0) {
+            stepsAllowed = Math.min(stepsAllowed, Math.floor((ks[j] - kMin) / -donorPerStep));
+          }
+          if (stepsAllowed <= 0) continue;
+          ks[badIdx] += dir * stepBad * stepsAllowed;
+          ks[j] += donorPerStep * stepsAllowed;
+          placed = true;
+          break;
+        }
+        if (!placed) return null;
+      }
+      if (ks.some((k) => k < kMin || k > kMax)) return null;
+      const sum = ks.reduce((a, k, i) => a + k * tts[i], 0);
+      if (sum !== T) return null;
+      return ks.map((k) => k / scale);
+    },
+    [],
+  );
+
+  const PCS_POOL = [10, 12, 16, 20, 24, 25, 30, 32, 40, 48, 50, 60, 75, 80, 100];
+
+  const autoFit = useCallback(() => {
+    const dec = decimals;
+    const targetCents = Math.round(grandTotalTarget * 100);
+
+    if (totalCtnsTarget < rows.length) {
+      setBanner({ type: "warn", text: `Total cartons (${totalCtnsTarget}) must be ≥ number of rows (${rows.length}).` });
+      return;
+    }
+    if (dec < 2) {
+      const factor = Math.pow(10, 2 - dec);
+      if (targetCents % factor !== 0) {
+        setBanner({
+          type: "warn",
+          text: `Grand total must be a multiple of $${(factor / 100).toFixed(Math.max(0, 2 - dec))} at ${dec} decimal.`,
+        });
+        return;
+      }
+    }
+
+    const n = rows.length;
+    const ids = rows.map((r) => r.id);
+    let bandWidened = 0;
+    let curMin = minPrice;
+    let curMax = maxPrice;
+
+    for (let bandTry = 0; bandTry < 4; bandTry++) {
+      for (let attempt = 0; attempt < 8; attempt++) {
+        const ctnsArr = randomPartition(totalCtnsTarget, n);
+        if (ctnsArr.length !== n) continue;
+        let pcsArr = Array.from(
+          { length: n },
+          () => PCS_POOL[Math.floor(Math.random() * PCS_POOL.length)],
+        );
+        let prices = tryPrices(ctnsArr, pcsArr, dec, targetCents, curMin, curMax);
+        if (!prices) {
+          outer: for (let radius = 1; radius <= 4 && !prices; radius++) {
+            for (let i = 0; i < n; i++) {
+              for (const sign of [-1, 1]) {
+                const np = pcsArr[i] + sign * radius;
+                if (np < 1 || np > 9999) continue;
+                const trial = pcsArr.slice();
+                trial[i] = np;
+                const p = tryPrices(ctnsArr, trial, dec, targetCents, curMin, curMax);
+                if (p) {
+                  pcsArr = trial;
+                  prices = p;
+                  break outer;
+                }
+              }
+            }
+          }
+        }
+        if (prices) {
+          const newRows: Row[] = ids.map((id, i) => ({
+            id,
+            ctns: ctnsArr[i],
+            pcs: pcsArr[i],
+            price: prices![i],
+          }));
+          setRows(newRows);
+          if (bandWidened > 0) {
+            setMinPrice(curMin);
+            setMaxPrice(curMax);
+          }
+          setBanner({
+            type: "success",
+            text:
+              `✓ Exact invoice generated: $${fmtMoney(grandTotalTarget)} across ${fmtInt(totalCtnsTarget)} cartons` +
+              (bandWidened > 0
+                ? ` (price band auto-widened to [$${curMin.toFixed(dec)}, $${curMax.toFixed(dec)}])`
+                : "") +
+              `.`,
+          });
+          return;
+        }
+      }
+      bandWidened++;
+      curMin = Math.max(Math.pow(10, -dec), curMin * 0.9);
+      curMax = curMax * 1.1;
+    }
+
+    setBanner({
+      type: "warn",
+      text: "Auto-Fit could not converge. Try a different row count, total cartons, or grand total.",
+    });
+  }, [rows, totalCtnsTarget, grandTotalTarget, decimals, minPrice, maxPrice, tryPrices]);
+
   return (
     <main className="min-h-screen px-4 py-8 md:py-12 pb-32">
       <div className="mx-auto w-full max-w-7xl">
@@ -703,20 +891,38 @@ const CargoOptimizer = () => {
             </div>
           )}
 
-          <div className="mt-5 flex flex-wrap gap-2">
-            <button onClick={randomizeCartons} className="glass-button px-4 py-2 text-sm">
-              🎲 Randomize Cartons
+          <div className="mt-6 flex flex-col items-center gap-3">
+            <button
+              onClick={autoFit}
+              className="submit-button w-full max-w-md px-6 py-4 text-base font-semibold tracking-wide"
+            >
+              ⚡ Generate Exact Invoice
             </button>
-            <button onClick={solve} className="submit-button px-5 py-2 text-sm">
-              ✦ Solve for Grand Total
-            </button>
-            <button onClick={addRow} className="glass-button px-4 py-2 text-sm">
-              + Add Row
-            </button>
-            <button onClick={reset} className="glass-button px-4 py-2 text-sm">
-              ↺ Reset
+            <button
+              onClick={() => setShowAdvanced((v) => !v)}
+              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              {showAdvanced ? "▴ Hide advanced controls" : "▾ Advanced controls"}
             </button>
           </div>
+
+          {showAdvanced && (
+            <div className="mt-4 flex flex-wrap gap-2 justify-center">
+              <button onClick={randomizeCartons} className="glass-button px-4 py-2 text-sm">
+                🎲 Randomize Cartons
+              </button>
+              <button onClick={solve} className="glass-button px-4 py-2 text-sm">
+                ✦ Solve Prices
+              </button>
+              <button onClick={addRow} className="glass-button px-4 py-2 text-sm">
+                + Add Row
+              </button>
+              <button onClick={reset} className="glass-button px-4 py-2 text-sm">
+                ↺ Reset
+              </button>
+            </div>
+          )}
+
 
           {banner && (
             <div
