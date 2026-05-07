@@ -87,6 +87,7 @@ const CargoOptimizer = () => {
   const [minPrice, setMinPrice] = useState<number>(0.01);
   const [maxPrice, setMaxPrice] = useState<number>(100);
   const [rows, setRows] = useState<Row[]>(() => makeDefaultRows());
+  const [showAdvanced, setShowAdvanced] = useState<boolean>(false);
   const [banner, setBanner] = useState<{
     type: "success" | "warn" | "info";
     text: string;
