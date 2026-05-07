@@ -659,6 +659,50 @@ const CargoOptimizer = () => {
             </div>
           </div>
 
+          {!feasibility.ok && suggestions.length > 0 && (
+            <div
+              className="mt-4 rounded-xl p-4"
+              style={{
+                border: "1px solid hsl(var(--aqua) / 0.25)",
+                background: "hsl(var(--aqua) / 0.05)",
+              }}
+            >
+              <div className="mb-2 flex items-center justify-between flex-wrap gap-2">
+                <span className="text-xs uppercase tracking-wide text-muted-foreground">
+                  Smallest PCS changes to make exact total feasible
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  {suggestions.length} suggestion{suggestions.length > 1 ? "s" : ""}
+                </span>
+              </div>
+              <ul className="space-y-2">
+                {suggestions.map((s, idx) => (
+                  <li
+                    key={idx}
+                    className="flex items-center justify-between gap-3 rounded-lg px-3 py-2"
+                    style={{
+                      background: "hsl(var(--background) / 0.5)",
+                      border: "1px solid hsl(var(--aqua) / 0.15)",
+                    }}
+                  >
+                    <div className="text-sm">
+                      <div className="font-mono tabular-nums">{s.label}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {s.reason} · total |Δ| = {s.totalAbsDelta}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => applySuggestion(s)}
+                      className="submit-button px-3 py-1.5 text-xs whitespace-nowrap"
+                    >
+                      Apply
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           <div className="mt-5 flex flex-wrap gap-2">
             <button onClick={randomizeCartons} className="glass-button px-4 py-2 text-sm">
               🎲 Randomize Cartons
