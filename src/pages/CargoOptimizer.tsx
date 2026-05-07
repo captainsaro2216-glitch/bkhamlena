@@ -891,20 +891,38 @@ const CargoOptimizer = () => {
             </div>
           )}
 
-          <div className="mt-5 flex flex-wrap gap-2">
-            <button onClick={randomizeCartons} className="glass-button px-4 py-2 text-sm">
-              🎲 Randomize Cartons
+          <div className="mt-6 flex flex-col items-center gap-3">
+            <button
+              onClick={autoFit}
+              className="submit-button w-full max-w-md px-6 py-4 text-base font-semibold tracking-wide"
+            >
+              ⚡ Generate Exact Invoice
             </button>
-            <button onClick={solve} className="submit-button px-5 py-2 text-sm">
-              ✦ Solve for Grand Total
-            </button>
-            <button onClick={addRow} className="glass-button px-4 py-2 text-sm">
-              + Add Row
-            </button>
-            <button onClick={reset} className="glass-button px-4 py-2 text-sm">
-              ↺ Reset
+            <button
+              onClick={() => setShowAdvanced((v) => !v)}
+              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              {showAdvanced ? "▴ Hide advanced controls" : "▾ Advanced controls"}
             </button>
           </div>
+
+          {showAdvanced && (
+            <div className="mt-4 flex flex-wrap gap-2 justify-center">
+              <button onClick={randomizeCartons} className="glass-button px-4 py-2 text-sm">
+                🎲 Randomize Cartons
+              </button>
+              <button onClick={solve} className="glass-button px-4 py-2 text-sm">
+                ✦ Solve Prices
+              </button>
+              <button onClick={addRow} className="glass-button px-4 py-2 text-sm">
+                + Add Row
+              </button>
+              <button onClick={reset} className="glass-button px-4 py-2 text-sm">
+                ↺ Reset
+              </button>
+            </div>
+          )}
+
 
           {banner && (
             <div
