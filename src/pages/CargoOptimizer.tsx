@@ -259,6 +259,132 @@ const CargoOptimizer = () => {
     return { ok: true as const, reason: "Exact total is achievable with current settings." };
   }, [rows, grandTotalTarget, decimals, minPrice, maxPrice]);
 
+  // Suggestions: smallest PCS (QTY) changes that make exact total feasible.
+  // Search single-row deltas first (cheapest), then 2-row combos if needed.
+  type Suggestion = {
+    changes: { rowId: string; rowIndex: number; oldPcs: number; newPcs: number; delta: number }[];
+    totalAbsDelta: number;
+    label: string;
+    reason: string;
+  };
+
+  const suggestions = useMemo<Suggestion[]>(() => {
+    if (feasibility.ok) return [];
+    const dec = decimals;
+    const scale = Math.pow(10, dec);
+    const targetCents = Math.round(grandTotalTarget * 100);
+    if (dec < 2) {
+      const factor = Math.pow(10, 2 - dec);
+      if (targetCents % factor !== 0) return []; // user must change total/decimals
+    }
+    const T = Math.round((targetCents * scale) / 100);
+    if (minPrice <= 0 || maxPrice < minPrice) return [];
+    const kMin = Math.ceil(minPrice * scale);
+    const kMax = Math.floor(maxPrice * scale);
+    if (kMin < 1 || kMin > kMax) return [];
+
+    const baseCtns = rows.map((r) => r.ctns);
+    const basePcs = rows.map((r) => r.pcs);
+    const n = rows.length;
+
+    const checkFeasible = (pcsArr: number[]): boolean => {
+      const tts: number[] = [];
+      for (let i = 0; i < n; i++) {
+        const tt = baseCtns[i] * pcsArr[i];
+        if (tt <= 0) return false;
+        tts.push(tt);
+      }
+      let g = tts[0];
+      for (let i = 1; i < n; i++) g = gcdN(g, tts[i]);
+      if (T % g !== 0) return false;
+      const lo = tts.reduce((a, t) => a + t * kMin, 0);
+      const hi = tts.reduce((a, t) => a + t * kMax, 0);
+      if (T < lo || T > hi) return false;
+      return true;
+    };
+
+    const out: Suggestion[] = [];
+    const MAX_DELTA = 25;
+
+    // Single-row search
+    for (let i = 0; i < n; i++) {
+      for (let d = 1; d <= MAX_DELTA; d++) {
+        for (const sign of [-1, 1]) {
+          const newPcs = basePcs[i] + sign * d;
+          if (newPcs < 1 || newPcs > 9999) continue;
+          const trial = basePcs.slice();
+          trial[i] = newPcs;
+          if (checkFeasible(trial)) {
+            out.push({
+              changes: [{ rowId: rows[i].id, rowIndex: i, oldPcs: basePcs[i], newPcs, delta: sign * d }],
+              totalAbsDelta: d,
+              label: `Row ${i + 1}: PCS ${basePcs[i]} → ${newPcs} (${sign > 0 ? "+" : ""}${sign * d})`,
+              reason: "Single-row PCS change",
+            });
+            break;
+          }
+        }
+        if (out.some((s) => s.changes[0]?.rowIndex === i)) break;
+      }
+    }
+
+    // If we have at least one single-row fix, return top 5 by smallest delta
+    if (out.length > 0) {
+      return out.sort((a, b) => a.totalAbsDelta - b.totalAbsDelta).slice(0, 5);
+    }
+
+    // Two-row combo search (small radius) as fallback
+    for (let i = 0; i < n && out.length < 5; i++) {
+      for (let j = i + 1; j < n && out.length < 5; j++) {
+        let found = false;
+        for (let total = 2; total <= 10 && !found; total++) {
+          for (let di = 1; di < total && !found; di++) {
+            const dj = total - di;
+            for (const si of [-1, 1]) {
+              for (const sj of [-1, 1]) {
+                const npi = basePcs[i] + si * di;
+                const npj = basePcs[j] + sj * dj;
+                if (npi < 1 || npi > 9999 || npj < 1 || npj > 9999) continue;
+                const trial = basePcs.slice();
+                trial[i] = npi;
+                trial[j] = npj;
+                if (checkFeasible(trial)) {
+                  out.push({
+                    changes: [
+                      { rowId: rows[i].id, rowIndex: i, oldPcs: basePcs[i], newPcs: npi, delta: si * di },
+                      { rowId: rows[j].id, rowIndex: j, oldPcs: basePcs[j], newPcs: npj, delta: sj * dj },
+                    ],
+                    totalAbsDelta: di + dj,
+                    label: `Row ${i + 1}: ${basePcs[i]}→${npi}, Row ${j + 1}: ${basePcs[j]}→${npj}`,
+                    reason: "Two-row PCS change",
+                  });
+                  found = true;
+                  break;
+                }
+              }
+              if (found) break;
+            }
+          }
+        }
+      }
+    }
+
+    return out.sort((a, b) => a.totalAbsDelta - b.totalAbsDelta).slice(0, 5);
+  }, [rows, grandTotalTarget, decimals, minPrice, maxPrice, feasibility.ok]);
+
+  const applySuggestion = (s: Suggestion) => {
+    setRows((prev) =>
+      prev.map((r) => {
+        const ch = s.changes.find((c) => c.rowId === r.id);
+        return ch ? { ...r, pcs: ch.newPcs } : r;
+      })
+    );
+    setBanner({
+      type: "info",
+      text: `Applied PCS change: ${s.label}. Click Solve to recompute prices.`,
+    });
+  };
+
   const solve = useCallback(() => {
     if (!feasibility.ok) {
       setBanner({ type: "warn", text: feasibility.reason });
