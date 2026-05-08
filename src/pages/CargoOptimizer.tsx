@@ -978,6 +978,18 @@ const CargoOptimizer = () => {
 
         {/* Table */}
         <section className="glass-panel p-2 md:p-4" dir="ltr">
+          <div className="flex items-center justify-between px-3 py-2">
+            <span className="text-xs text-muted-foreground uppercase tracking-wide">
+              Invoice rows
+            </span>
+            <button
+              onClick={copyNumbers}
+              className="glass-button px-3 py-1.5 text-xs"
+              title="Copy cartons, PCS, and prices in clean vertical format"
+            >
+              📋 Copy Numbers
+            </button>
+          </div>
           <div className="overflow-x-auto rounded-xl">
             <table className="w-full text-sm">
               <thead>
