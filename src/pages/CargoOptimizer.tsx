@@ -88,6 +88,7 @@ const CargoOptimizer = () => {
   const [maxPrice, setMaxPrice] = useState<number>(100);
   const [rows, setRows] = useState<Row[]>(() => makeDefaultRows());
   const [showAdvanced, setShowAdvanced] = useState<boolean>(false);
+  const [freeDivide, setFreeDivide] = useState<boolean>(false);
   const [banner, setBanner] = useState<{
     type: "success" | "warn" | "info";
     text: string;
@@ -548,6 +549,51 @@ const CargoOptimizer = () => {
     });
   }, [rows, grandTotalTarget, decimals, minPrice, maxPrice, feasibility]);
 
+  // ============ FORCE-DIVIDE (no TT/QTY constraint) ============
+  // Distributes target amount cents across rows proportional to TT, then sets
+  // price = amountCents / 100 / TT. Always produces an exact grand total at any
+  // decimal setting because amounts are tracked in integer cents.
+  const forceDividePrices = useCallback(
+    (ctnsArr?: number[], pcsArr?: number[]): boolean => {
+      const ctns = ctnsArr ?? rows.map((r) => r.ctns);
+      const pcs = pcsArr ?? rows.map((r) => r.pcs);
+      const n = rows.length;
+      const tts = ctns.map((c, i) => c * pcs[i]);
+      const totalTT = tts.reduce((a, b) => a + b, 0);
+      if (totalTT <= 0 || tts.some((t) => t <= 0)) {
+        setBanner({ type: "warn", text: "Force-divide needs valid CTNS and PCS in every row." });
+        return false;
+      }
+      const targetCents = Math.round(grandTotalTarget * 100);
+      // Proportional integer-cent split, then distribute remainder cents largest-first
+      const amountsCents = tts.map((t) => Math.floor((targetCents * t) / totalTT));
+      let remainder = targetCents - amountsCents.reduce((a, b) => a + b, 0);
+      const order = tts
+        .map((t, i) => ({ i, frac: (targetCents * t) / totalTT - Math.floor((targetCents * t) / totalTT) }))
+        .sort((a, b) => b.frac - a.frac);
+      for (let k = 0; remainder > 0 && k < order.length; k++, remainder--) {
+        amountsCents[order[k].i]++;
+      }
+      while (remainder > 0) { amountsCents[remainder % n]++; remainder--; }
+
+      const newPrices = amountsCents.map((c, i) => c / 100 / tts[i]);
+      setRows((prev) =>
+        prev.map((r, i) => ({
+          ...r,
+          ctns: ctns[i],
+          pcs: pcs[i],
+          price: newPrices[i],
+        })),
+      );
+      setBanner({
+        type: "success",
+        text: `✓ Forced exact total $${fmtMoney(grandTotalTarget)} by dividing amounts ÷ QTY (TT/QTY constraint disabled).`,
+      });
+      return true;
+    },
+    [rows, grandTotalTarget],
+  );
+
   // ============ AUTO-FIT PIPELINE (one-click exact invoice) ============
   const tryPrices = useCallback(
     (
@@ -656,6 +702,20 @@ const CargoOptimizer = () => {
       setBanner({ type: "warn", text: `Total cartons (${totalCtnsTarget}) must be ≥ number of rows (${rows.length}).` });
       return;
     }
+
+    // Force-Divide mode: skip GCD/decimal/band constraints entirely.
+    if (freeDivide) {
+      const n = rows.length;
+      const ctnsArr = randomPartition(totalCtnsTarget, n);
+      if (ctnsArr.length !== n) {
+        setBanner({ type: "warn", text: "Could not distribute cartons across rows." });
+        return;
+      }
+      const pcsArr = rows.map((r) => r.pcs > 0 ? r.pcs : PCS_POOL[Math.floor(Math.random() * PCS_POOL.length)]);
+      forceDividePrices(ctnsArr, pcsArr);
+      return;
+    }
+
     if (dec < 2) {
       const factor = Math.pow(10, 2 - dec);
       if (targetCents % factor !== 0) {
@@ -733,7 +793,7 @@ const CargoOptimizer = () => {
       type: "warn",
       text: "Auto-Fit could not converge. Try a different row count, total cartons, or grand total.",
     });
-  }, [rows, totalCtnsTarget, grandTotalTarget, decimals, minPrice, maxPrice, tryPrices]);
+  }, [rows, totalCtnsTarget, grandTotalTarget, decimals, minPrice, maxPrice, tryPrices, freeDivide, forceDividePrices]);
 
   return (
     <main className="min-h-screen px-4 py-8 md:py-12 pb-32">
@@ -874,6 +934,31 @@ const CargoOptimizer = () => {
             </div>
           </div>
 
+          {/* Force-Divide toggle */}
+          <label
+            className="mt-3 flex items-center gap-3 rounded-xl px-4 py-3 cursor-pointer select-none"
+            style={{
+              border: `1px solid hsl(var(--aqua) / ${freeDivide ? 0.5 : 0.18})`,
+              background: `hsl(var(--aqua) / ${freeDivide ? 0.08 : 0.03})`,
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={freeDivide}
+              onChange={(e) => setFreeDivide(e.target.checked)}
+              className="h-4 w-4 accent-current"
+            />
+            <div className="flex-1">
+              <div className="text-sm font-medium">
+                Disable TT/QTY constraint — Force-Divide prices
+              </div>
+              <div className="text-xs text-muted-foreground mt-0.5">
+                Splits the grand total across rows in cents and sets each price = amount ÷ (CTNS × PCS).
+                Always exact at any decimals; ignores GCD feasibility and the min/max price band.
+              </div>
+            </div>
+          </label>
+
           {!feasibility.ok && suggestions.length > 0 && (
             <div
               className="mt-4 rounded-xl p-4"
@@ -940,6 +1025,9 @@ const CargoOptimizer = () => {
               </button>
               <button onClick={solve} className="glass-button px-4 py-2 text-sm">
                 ✦ Solve Prices
+              </button>
+              <button onClick={() => forceDividePrices()} className="glass-button px-4 py-2 text-sm">
+                ÷ Force-Divide Prices
               </button>
               <button onClick={addRow} className="glass-button px-4 py-2 text-sm">
                 + Add Row
