@@ -702,6 +702,20 @@ const CargoOptimizer = () => {
       setBanner({ type: "warn", text: `Total cartons (${totalCtnsTarget}) must be ≥ number of rows (${rows.length}).` });
       return;
     }
+
+    // Force-Divide mode: skip GCD/decimal/band constraints entirely.
+    if (freeDivide) {
+      const n = rows.length;
+      const ctnsArr = randomPartition(totalCtnsTarget, n);
+      if (ctnsArr.length !== n) {
+        setBanner({ type: "warn", text: "Could not distribute cartons across rows." });
+        return;
+      }
+      const pcsArr = rows.map((r) => r.pcs > 0 ? r.pcs : PCS_POOL[Math.floor(Math.random() * PCS_POOL.length)]);
+      forceDividePrices(ctnsArr, pcsArr);
+      return;
+    }
+
     if (dec < 2) {
       const factor = Math.pow(10, 2 - dec);
       if (targetCents % factor !== 0) {
