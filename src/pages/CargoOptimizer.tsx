@@ -793,7 +793,7 @@ const CargoOptimizer = () => {
       type: "warn",
       text: "Auto-Fit could not converge. Try a different row count, total cartons, or grand total.",
     });
-  }, [rows, totalCtnsTarget, grandTotalTarget, decimals, minPrice, maxPrice, tryPrices]);
+  }, [rows, totalCtnsTarget, grandTotalTarget, decimals, minPrice, maxPrice, tryPrices, freeDivide, forceDividePrices]);
 
   return (
     <main className="min-h-screen px-4 py-8 md:py-12 pb-32">
