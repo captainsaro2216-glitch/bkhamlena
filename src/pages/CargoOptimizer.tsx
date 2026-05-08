@@ -1008,11 +1008,55 @@ const CargoOptimizer = () => {
                   style={{ borderBottom: "1px solid hsl(var(--aqua) / 0.18)" }}
                 >
                   <th className="px-3 py-3 text-left">#</th>
-                  <th className="px-3 py-3 text-right">QTY (CTNS)</th>
-                  <th className="px-3 py-3 text-right">QTY (PCS)</th>
+                  <th className="px-3 py-3 text-right">
+                    <div className="flex items-center justify-end gap-1">
+                      <span>QTY (CTNS)</span>
+                      <button
+                        onClick={() => copyColumn("CTNS", computed.map((r) => fmtInt(r.ctns)))}
+                        className="ml-1 rounded px-1 py-0.5 text-[10px] text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+                        title="Copy CTNS column"
+                      >
+                        📋
+                      </button>
+                    </div>
+                  </th>
+                  <th className="px-3 py-3 text-right">
+                    <div className="flex items-center justify-end gap-1">
+                      <span>QTY (PCS)</span>
+                      <button
+                        onClick={() => copyColumn("PCS", computed.map((r) => fmtInt(r.pcs)))}
+                        className="ml-1 rounded px-1 py-0.5 text-[10px] text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+                        title="Copy PCS column"
+                      >
+                        📋
+                      </button>
+                    </div>
+                  </th>
                   <th className="px-3 py-3 text-right">TT / QTY (PCS)</th>
-                  <th className="px-3 py-3 text-right">Unit Price (USD)</th>
-                  <th className="px-3 py-3 text-right">Amount (USD)</th>
+                  <th className="px-3 py-3 text-right">
+                    <div className="flex items-center justify-end gap-1">
+                      <span>Unit Price (USD)</span>
+                      <button
+                        onClick={() => copyColumn("Unit Price", computed.map((r) => r.price.toFixed(decimals)))}
+                        className="ml-1 rounded px-1 py-0.5 text-[10px] text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+                        title="Copy Unit Price column"
+                      >
+                        📋
+                      </button>
+                    </div>
+                  </th>
+                  <th className="px-3 py-3 text-right">
+                    <div className="flex items-center justify-end gap-1">
+                      <span>Amount (USD)</span>
+                      <button
+                        onClick={() => copyColumn("Amount", computed.map((r) => `$${fmtMoney(r.amount)}`))}
+                        className="ml-1 rounded px-1 py-0.5 text-[10px] text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+                        title="Copy Amount column"
+                      >
+                        📋
+                      </button>
+                    </div>
+                  </th>
                   <th className="px-3 py-3 text-center w-12"></th>
                 </tr>
               </thead>
