@@ -210,6 +210,16 @@ const CargoOptimizer = () => {
     }
   };
 
+  const copyColumn = async (label: string, values: (string | number)[]) => {
+    const text = values.join("\n");
+    try {
+      await navigator.clipboard.writeText(text);
+      setBanner({ type: "success", text: `Copied ${label} column (${values.length} rows).` });
+    } catch {
+      setBanner({ type: "warn", text: "Copy failed. Browser may have blocked clipboard access." });
+    }
+  };
+
   const randomizeCartons = () => {
     if (totalCtnsTarget < rows.length) {
       setBanner({
