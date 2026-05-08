@@ -1026,6 +1026,9 @@ const CargoOptimizer = () => {
               <button onClick={solve} className="glass-button px-4 py-2 text-sm">
                 ✦ Solve Prices
               </button>
+              <button onClick={() => forceDividePrices()} className="glass-button px-4 py-2 text-sm">
+                ÷ Force-Divide Prices
+              </button>
               <button onClick={addRow} className="glass-button px-4 py-2 text-sm">
                 + Add Row
               </button>
