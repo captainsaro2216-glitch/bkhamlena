@@ -934,6 +934,31 @@ const CargoOptimizer = () => {
             </div>
           </div>
 
+          {/* Force-Divide toggle */}
+          <label
+            className="mt-3 flex items-center gap-3 rounded-xl px-4 py-3 cursor-pointer select-none"
+            style={{
+              border: `1px solid hsl(var(--aqua) / ${freeDivide ? 0.5 : 0.18})`,
+              background: `hsl(var(--aqua) / ${freeDivide ? 0.08 : 0.03})`,
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={freeDivide}
+              onChange={(e) => setFreeDivide(e.target.checked)}
+              className="h-4 w-4 accent-current"
+            />
+            <div className="flex-1">
+              <div className="text-sm font-medium">
+                Disable TT/QTY constraint — Force-Divide prices
+              </div>
+              <div className="text-xs text-muted-foreground mt-0.5">
+                Splits the grand total across rows in cents and sets each price = amount ÷ (CTNS × PCS).
+                Always exact at any decimals; ignores GCD feasibility and the min/max price band.
+              </div>
+            </div>
+          </label>
+
           {!feasibility.ok && suggestions.length > 0 && (
             <div
               className="mt-4 rounded-xl p-4"
