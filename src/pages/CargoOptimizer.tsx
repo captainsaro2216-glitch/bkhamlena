@@ -188,6 +188,28 @@ const CargoOptimizer = () => {
     setBanner(null);
   };
 
+  const copyNumbers = async () => {
+    const lines: string[] = [];
+    computed.forEach((r, i) => {
+      lines.push(`Row ${i + 1}`);
+      lines.push(`CTNS: ${fmtInt(r.ctns)}`);
+      lines.push(`PCS: ${fmtInt(r.pcs)}`);
+      lines.push(`Price: $${r.price.toFixed(decimals)}`);
+      lines.push(`Amount: $${fmtMoney(r.amount)}`);
+      if (i < computed.length - 1) lines.push("");
+    });
+    lines.push("");
+    lines.push(`Total CTNS: ${fmtInt(sumCtns)}`);
+    lines.push(`Grand Total: $${fmtMoney(grandTotal)}`);
+    const text = lines.join("\n");
+    try {
+      await navigator.clipboard.writeText(text);
+      setBanner({ type: "success", text: "Copied invoice numbers to clipboard." });
+    } catch {
+      setBanner({ type: "warn", text: "Copy failed. Browser may have blocked clipboard access." });
+    }
+  };
+
   const randomizeCartons = () => {
     if (totalCtnsTarget < rows.length) {
       setBanner({
@@ -956,6 +978,18 @@ const CargoOptimizer = () => {
 
         {/* Table */}
         <section className="glass-panel p-2 md:p-4" dir="ltr">
+          <div className="flex items-center justify-between px-3 py-2">
+            <span className="text-xs text-muted-foreground uppercase tracking-wide">
+              Invoice rows
+            </span>
+            <button
+              onClick={copyNumbers}
+              className="glass-button px-3 py-1.5 text-xs"
+              title="Copy cartons, PCS, and prices in clean vertical format"
+            >
+              📋 Copy Numbers
+            </button>
+          </div>
           <div className="overflow-x-auto rounded-xl">
             <table className="w-full text-sm">
               <thead>
