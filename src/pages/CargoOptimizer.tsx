@@ -549,6 +549,51 @@ const CargoOptimizer = () => {
     });
   }, [rows, grandTotalTarget, decimals, minPrice, maxPrice, feasibility]);
 
+  // ============ FORCE-DIVIDE (no TT/QTY constraint) ============
+  // Distributes target amount cents across rows proportional to TT, then sets
+  // price = amountCents / 100 / TT. Always produces an exact grand total at any
+  // decimal setting because amounts are tracked in integer cents.
+  const forceDividePrices = useCallback(
+    (ctnsArr?: number[], pcsArr?: number[]): boolean => {
+      const ctns = ctnsArr ?? rows.map((r) => r.ctns);
+      const pcs = pcsArr ?? rows.map((r) => r.pcs);
+      const n = rows.length;
+      const tts = ctns.map((c, i) => c * pcs[i]);
+      const totalTT = tts.reduce((a, b) => a + b, 0);
+      if (totalTT <= 0 || tts.some((t) => t <= 0)) {
+        setBanner({ type: "warn", text: "Force-divide needs valid CTNS and PCS in every row." });
+        return false;
+      }
+      const targetCents = Math.round(grandTotalTarget * 100);
+      // Proportional integer-cent split, then distribute remainder cents largest-first
+      const amountsCents = tts.map((t) => Math.floor((targetCents * t) / totalTT));
+      let remainder = targetCents - amountsCents.reduce((a, b) => a + b, 0);
+      const order = tts
+        .map((t, i) => ({ i, frac: (targetCents * t) / totalTT - Math.floor((targetCents * t) / totalTT) }))
+        .sort((a, b) => b.frac - a.frac);
+      for (let k = 0; remainder > 0 && k < order.length; k++, remainder--) {
+        amountsCents[order[k].i]++;
+      }
+      while (remainder > 0) { amountsCents[remainder % n]++; remainder--; }
+
+      const newPrices = amountsCents.map((c, i) => c / 100 / tts[i]);
+      setRows((prev) =>
+        prev.map((r, i) => ({
+          ...r,
+          ctns: ctns[i],
+          pcs: pcs[i],
+          price: newPrices[i],
+        })),
+      );
+      setBanner({
+        type: "success",
+        text: `✓ Forced exact total $${fmtMoney(grandTotalTarget)} by dividing amounts ÷ QTY (TT/QTY constraint disabled).`,
+      });
+      return true;
+    },
+    [rows, grandTotalTarget],
+  );
+
   // ============ AUTO-FIT PIPELINE (one-click exact invoice) ============
   const tryPrices = useCallback(
     (
