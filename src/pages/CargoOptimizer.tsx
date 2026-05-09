@@ -842,7 +842,7 @@ const CargoOptimizer = () => {
   }, [rows, totalCtnsTarget, grandTotalTarget, decimals, minPrice, maxPrice, tryPrices, freeDivide, forceDividePrices]);
 
   return (
-    <main className="min-h-screen px-4 py-8 md:py-12 pb-32">
+    <main className={`min-h-screen px-4 py-8 md:py-12 pb-32 ${cartonMode ? "carton-theme" : ""}`}>
       <div className="mx-auto w-full max-w-7xl">
         <div className="mb-6 flex items-center justify-between gap-4 flex-wrap">
           <div>
@@ -853,9 +853,18 @@ const CargoOptimizer = () => {
               Distribute cartons and solve unit prices to hit your grand total exactly.
             </p>
           </div>
-          <Link to="/" className="glass-button px-4 py-2 text-xs">
-            ← Sum Generator
-          </Link>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setCartonMode((v) => !v)}
+              className="glass-button px-3 py-2 text-xs"
+              title={cartonMode ? "Switch to ocean theme" : "Switch to carton theme"}
+            >
+              {cartonMode ? "📦 Carton Mode" : "🌊 Ocean Mode"}
+            </button>
+            <Link to="/" className="glass-button px-4 py-2 text-xs">
+              ← Sum Generator
+            </Link>
+          </div>
         </div>
 
         {/* Control panel */}
