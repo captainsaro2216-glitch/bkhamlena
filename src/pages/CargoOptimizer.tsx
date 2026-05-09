@@ -1116,17 +1116,28 @@ const CargoOptimizer = () => {
 
         {/* Table */}
         <section className="glass-panel p-2 md:p-4" dir="ltr">
-          <div className="flex items-center justify-between px-3 py-2">
+          <div className="flex items-center justify-between px-3 py-2 flex-wrap gap-2">
             <span className="text-xs text-muted-foreground uppercase tracking-wide">
               Invoice rows
             </span>
-            <button
-              onClick={copyNumbers}
-              className="glass-button px-3 py-1.5 text-xs"
-              title="Copy cartons, PCS, and prices in clean vertical format"
-            >
-              📋 Copy Numbers
-            </button>
+            <div className="flex items-center gap-3 flex-wrap">
+              <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={copyAsForceDivide}
+                  onChange={(e) => setCopyAsForceDivide(e.target.checked)}
+                  className="h-3.5 w-3.5 accent-current"
+                />
+                <span className="text-xs text-muted-foreground">Copy Force-Divide values</span>
+              </label>
+              <button
+                onClick={copyNumbers}
+                className="glass-button px-3 py-1.5 text-xs"
+                title="Copy cartons, PCS, and prices in clean vertical format"
+              >
+                📋 Copy Numbers
+              </button>
+            </div>
           </div>
           <div className="overflow-x-auto rounded-xl">
             <table className="w-full text-sm">
