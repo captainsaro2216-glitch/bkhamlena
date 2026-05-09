@@ -89,6 +89,7 @@ const CargoOptimizer = () => {
   const [rows, setRows] = useState<Row[]>(() => makeDefaultRows());
   const [showAdvanced, setShowAdvanced] = useState<boolean>(false);
   const [freeDivide, setFreeDivide] = useState<boolean>(false);
+  const [copyAsForceDivide, setCopyAsForceDivide] = useState<boolean>(false);
   const [banner, setBanner] = useState<{
     type: "success" | "warn" | "info";
     text: string;
