@@ -89,6 +89,7 @@ const CargoOptimizer = () => {
   const [rows, setRows] = useState<Row[]>(() => makeDefaultRows());
   const [showAdvanced, setShowAdvanced] = useState<boolean>(false);
   const [freeDivide, setFreeDivide] = useState<boolean>(false);
+  const [copyAsForceDivide, setCopyAsForceDivide] = useState<boolean>(false);
   const [banner, setBanner] = useState<{
     type: "success" | "warn" | "info";
     text: string;
@@ -190,17 +191,31 @@ const CargoOptimizer = () => {
   };
 
   const copyNumbers = async () => {
-    // Clean tab-separated columns: CTNS  PCS  Price  Amount
-    const lines: string[] = ["CTNS\tPCS\tPrice\tAmount"];
-    computed.forEach((r) => {
-      lines.push(
-        `${r.ctns}\t${r.pcs}\t${r.price.toFixed(decimals)}\t${r.amount.toFixed(2)}`
-      );
-    });
+    let lines: string[];
+    if (copyAsForceDivide) {
+      const ctnsArr = rows.map((r) => r.ctns);
+      const pcsArr = rows.map((r) => r.pcs);
+      const fd = computeForceDivide(ctnsArr, pcsArr);
+      if (!fd) {
+        setBanner({ type: "warn", text: "Could not compute Force-Divide values for copy." });
+        return;
+      }
+      lines = ["CTNS\tPCS\tPrice\tAmount"];
+      fd.forEach((r) => {
+        lines.push(`${r.ctns}\t${r.pcs}\t${r.price.toFixed(decimals)}\t${r.amount.toFixed(2)}`);
+      });
+    } else {
+      lines = ["CTNS\tPCS\tPrice\tAmount"];
+      computed.forEach((r) => {
+        lines.push(
+          `${r.ctns}\t${r.pcs}\t${r.price.toFixed(decimals)}\t${r.amount.toFixed(2)}`
+        );
+      });
+    }
     const text = lines.join("\n");
     try {
       await navigator.clipboard.writeText(text);
-      setBanner({ type: "success", text: "Copied invoice numbers (tab-separated columns)." });
+      setBanner({ type: "success", text: `Copied invoice numbers (${copyAsForceDivide ? "Force-Divide" : "current"} values, tab-separated columns).` });
     } catch {
       setBanner({ type: "warn", text: "Copy failed. Browser may have blocked clipboard access." });
     }
@@ -548,6 +563,36 @@ const CargoOptimizer = () => {
       text: `Grand total solved: $${fmtMoney(grandTotalTarget)} — exact at ${dec} decimal${dec > 1 ? "s" : ""}, prices within [$${minPrice}, $${maxPrice}] ✓`,
     });
   }, [rows, grandTotalTarget, decimals, minPrice, maxPrice, feasibility]);
+
+  // Compute force-divide values without mutating state (for copy)
+  const computeForceDivide = useCallback(
+    (
+      ctnsArr: number[],
+      pcsArr: number[],
+    ): { ctns: number; pcs: number; price: number; amount: number }[] | null => {
+      const n = ctnsArr.length;
+      const tts = ctnsArr.map((c, i) => c * pcsArr[i]);
+      const totalTT = tts.reduce((a, b) => a + b, 0);
+      if (totalTT <= 0 || tts.some((t) => t <= 0)) return null;
+      const targetCents = Math.round(grandTotalTarget * 100);
+      const amountsCents = tts.map((t) => Math.floor((targetCents * t) / totalTT));
+      let remainder = targetCents - amountsCents.reduce((a, b) => a + b, 0);
+      const order = tts
+        .map((t, i) => ({ i, frac: (targetCents * t) / totalTT - Math.floor((targetCents * t) / totalTT) }))
+        .sort((a, b) => b.frac - a.frac);
+      for (let k = 0; remainder > 0 && k < order.length; k++, remainder--) {
+        amountsCents[order[k].i]++;
+      }
+      while (remainder > 0) { amountsCents[remainder % n]++; remainder--; }
+      return amountsCents.map((c, i) => ({
+        ctns: ctnsArr[i],
+        pcs: pcsArr[i],
+        price: c / 100 / tts[i],
+        amount: c / 100,
+      }));
+    },
+    [grandTotalTarget],
+  );
 
   // ============ FORCE-DIVIDE (no TT/QTY constraint) ============
   // Distributes target amount cents across rows proportional to TT, then sets
@@ -1071,17 +1116,28 @@ const CargoOptimizer = () => {
 
         {/* Table */}
         <section className="glass-panel p-2 md:p-4" dir="ltr">
-          <div className="flex items-center justify-between px-3 py-2">
+          <div className="flex items-center justify-between px-3 py-2 flex-wrap gap-2">
             <span className="text-xs text-muted-foreground uppercase tracking-wide">
               Invoice rows
             </span>
-            <button
-              onClick={copyNumbers}
-              className="glass-button px-3 py-1.5 text-xs"
-              title="Copy cartons, PCS, and prices in clean vertical format"
-            >
-              📋 Copy Numbers
-            </button>
+            <div className="flex items-center gap-3 flex-wrap">
+              <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={copyAsForceDivide}
+                  onChange={(e) => setCopyAsForceDivide(e.target.checked)}
+                  className="h-3.5 w-3.5 accent-current"
+                />
+                <span className="text-xs text-muted-foreground">Copy Force-Divide values</span>
+              </label>
+              <button
+                onClick={copyNumbers}
+                className="glass-button px-3 py-1.5 text-xs"
+                title="Copy cartons, PCS, and prices in clean vertical format"
+              >
+                📋 Copy Numbers
+              </button>
+            </div>
           </div>
           <div className="overflow-x-auto rounded-xl">
             <table className="w-full text-sm">
