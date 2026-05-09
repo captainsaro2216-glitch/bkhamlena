@@ -212,6 +212,8 @@
   .submit-button:active {
     background: linear-gradient(135deg, hsl(var(--amber) / 0.7), hsl(var(--amber) / 0.35));
     color: hsl(40 30% 98%);
+  }
+
   /* ============ CARTON THEME ============ */
   .carton-theme {
     --background: 32 28% 84%;
