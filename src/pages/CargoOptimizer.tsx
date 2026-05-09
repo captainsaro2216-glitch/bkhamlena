@@ -90,6 +90,7 @@ const CargoOptimizer = () => {
   const [showAdvanced, setShowAdvanced] = useState<boolean>(false);
   const [freeDivide, setFreeDivide] = useState<boolean>(false);
   const [copyAsForceDivide, setCopyAsForceDivide] = useState<boolean>(false);
+  const [cartonMode, setCartonMode] = useState<boolean>(true);
   const [banner, setBanner] = useState<{
     type: "success" | "warn" | "info";
     text: string;
