@@ -550,6 +550,36 @@ const CargoOptimizer = () => {
     });
   }, [rows, grandTotalTarget, decimals, minPrice, maxPrice, feasibility]);
 
+  // Compute force-divide values without mutating state (for copy)
+  const computeForceDivide = useCallback(
+    (
+      ctnsArr: number[],
+      pcsArr: number[],
+    ): { ctns: number; pcs: number; price: number; amount: number }[] | null => {
+      const n = ctnsArr.length;
+      const tts = ctnsArr.map((c, i) => c * pcsArr[i]);
+      const totalTT = tts.reduce((a, b) => a + b, 0);
+      if (totalTT <= 0 || tts.some((t) => t <= 0)) return null;
+      const targetCents = Math.round(grandTotalTarget * 100);
+      const amountsCents = tts.map((t) => Math.floor((targetCents * t) / totalTT));
+      let remainder = targetCents - amountsCents.reduce((a, b) => a + b, 0);
+      const order = tts
+        .map((t, i) => ({ i, frac: (targetCents * t) / totalTT - Math.floor((targetCents * t) / totalTT) }))
+        .sort((a, b) => b.frac - a.frac);
+      for (let k = 0; remainder > 0 && k < order.length; k++, remainder--) {
+        amountsCents[order[k].i]++;
+      }
+      while (remainder > 0) { amountsCents[remainder % n]++; remainder--; }
+      return amountsCents.map((c, i) => ({
+        ctns: ctnsArr[i],
+        pcs: pcsArr[i],
+        price: c / 100 / tts[i],
+        amount: c / 100,
+      }));
+    },
+    [grandTotalTarget],
+  );
+
   // ============ FORCE-DIVIDE (no TT/QTY constraint) ============
   // Distributes target amount cents across rows proportional to TT, then sets
   // price = amountCents / 100 / TT. Always produces an exact grand total at any
