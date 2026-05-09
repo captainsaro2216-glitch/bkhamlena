@@ -191,17 +191,31 @@ const CargoOptimizer = () => {
   };
 
   const copyNumbers = async () => {
-    // Clean tab-separated columns: CTNS  PCS  Price  Amount
-    const lines: string[] = ["CTNS\tPCS\tPrice\tAmount"];
-    computed.forEach((r) => {
-      lines.push(
-        `${r.ctns}\t${r.pcs}\t${r.price.toFixed(decimals)}\t${r.amount.toFixed(2)}`
-      );
-    });
+    let lines: string[];
+    if (copyAsForceDivide) {
+      const ctnsArr = rows.map((r) => r.ctns);
+      const pcsArr = rows.map((r) => r.pcs);
+      const fd = computeForceDivide(ctnsArr, pcsArr);
+      if (!fd) {
+        setBanner({ type: "warn", text: "Could not compute Force-Divide values for copy." });
+        return;
+      }
+      lines = ["CTNS\tPCS\tPrice\tAmount"];
+      fd.forEach((r) => {
+        lines.push(`${r.ctns}\t${r.pcs}\t${r.price.toFixed(decimals)}\t${r.amount.toFixed(2)}`);
+      });
+    } else {
+      lines = ["CTNS\tPCS\tPrice\tAmount"];
+      computed.forEach((r) => {
+        lines.push(
+          `${r.ctns}\t${r.pcs}\t${r.price.toFixed(decimals)}\t${r.amount.toFixed(2)}`
+        );
+      });
+    }
     const text = lines.join("\n");
     try {
       await navigator.clipboard.writeText(text);
-      setBanner({ type: "success", text: "Copied invoice numbers (tab-separated columns)." });
+      setBanner({ type: "success", text: `Copied invoice numbers (${copyAsForceDivide ? "Force-Divide" : "current"} values, tab-separated columns).` });
     } catch {
       setBanner({ type: "warn", text: "Copy failed. Browser may have blocked clipboard access." });
     }
